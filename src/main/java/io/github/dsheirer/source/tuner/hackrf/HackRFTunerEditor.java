@@ -58,6 +58,7 @@ public class HackRFTunerEditor extends TunerConfigurationEditor
     private JComboBox<HackRFSampleRate> mComboSampleRate;
     private JSpinner mFrequencyCorrection;
     private JToggleButton mAmplifier;
+    private JToggleButton mAntennaBias;
     private JComboBox<HackRFLNAGain> mComboLNAGain;
     private JComboBox<HackRFVGAGain> mComboVGAGain;
     private boolean mLoading;
@@ -219,6 +220,29 @@ public class HackRFTunerEditor extends TunerConfigurationEditor
         });
         add(mAmplifier);
 
+        mAntennaBias = new JToggleButton("Antenna Bias");
+        mAntennaBias.setEnabled(false);
+        mAntennaBias.addActionListener(new ActionListener()
+        {
+            @Override
+            public void actionPerformed(ActionEvent arg0)
+            {
+                try
+                {
+                    mController.setAntennaBiasEnabled(mAntennaBias.isSelected());
+                    save();
+                }
+                catch(UsbException e)
+                {
+                    mLog.error("couldn't enable/disable antenna bias", e);
+
+                    JOptionPane.showMessageDialog(HackRFTunerEditor.this, "Couldn't change antenna bias setting",
+                        "Error changing antenna bias setting", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        });
+        add(mAntennaBias);
+
         mComboLNAGain = new JComboBox<HackRFLNAGain>(HackRFLNAGain.values());
         mComboLNAGain.setEnabled(false);
         mComboLNAGain.addActionListener(new ActionListener()
@@ -340,6 +364,11 @@ public class HackRFTunerEditor extends TunerConfigurationEditor
             mAmplifier.setEnabled(enabled);
         }
 
+        if(mAntennaBias.isEnabled() != enabled)
+        {
+            mAntennaBias.setEnabled(enabled);
+        }
+
         if(mComboLNAGain.isEnabled() != enabled)
         {
             mComboLNAGain.setEnabled(enabled);
@@ -444,6 +473,7 @@ public class HackRFTunerEditor extends TunerConfigurationEditor
                 mComboSampleRate.setSelectedItem(config.getSampleRate());
                 mFrequencyCorrection.setValue(config.getFrequencyCorrection());
                 mAmplifier.setSelected(config.getAmplifierEnabled());
+                mAntennaBias.setSelected(config.getAntennaBiasEnabled());
                 mComboLNAGain.setSelectedItem(config.getLNAGain());
                 mComboVGAGain.setSelectedItem(config.getVGAGain());
 
@@ -479,6 +509,7 @@ public class HackRFTunerEditor extends TunerConfigurationEditor
             config.setFrequencyCorrection(value);
             config.setSampleRate((HackRFSampleRate)mComboSampleRate.getSelectedItem());
             config.setAmplifierEnabled(mAmplifier.isSelected());
+            config.setAntennaBiasEnabled(mAntennaBias.isSelected());
             config.setLNAGain((HackRFLNAGain)mComboLNAGain.getSelectedItem());
             config.setVGAGain((HackRFVGAGain)mComboVGAGain.getSelectedItem());
 

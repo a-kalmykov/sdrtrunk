@@ -1,5 +1,5 @@
 /*******************************************************************************
- *     SDR Trunk 
+ *     SDR Trunk
  *     Copyright (C) 2014 Dennis Sheirer
  *
  *     This program is free software: you can redistribute it and/or modify
@@ -31,6 +31,7 @@ public class HackRFTunerConfiguration extends TunerConfiguration
     private HackRFLNAGain mLNAGain = HackRFLNAGain.GAIN_16;
     private HackRFVGAGain mVGAGain = HackRFVGAGain.GAIN_10;
     private boolean mAmplifierEnabled = true;
+    private boolean mAntennaBiasEnabled = false;
     private double mFrequencyCorrection = 0.0d;
 
     /**
@@ -61,6 +62,17 @@ public class HackRFTunerConfiguration extends TunerConfiguration
     public void setAmplifierEnabled(boolean enabled)
     {
         mAmplifierEnabled = enabled;
+    }
+
+    @JacksonXmlProperty(isAttribute = true, localName = "antenna_bias_enabled")
+    public boolean getAntennaBiasEnabled()
+    {
+        return mAntennaBiasEnabled;
+    }
+
+    public void setAntennaBiasEnabled(boolean enabled)
+    {
+        mAntennaBiasEnabled = enabled;
     }
 
     @JacksonXmlProperty(isAttribute = true, localName = "lna_gain")
