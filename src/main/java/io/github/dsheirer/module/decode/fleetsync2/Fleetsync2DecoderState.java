@@ -1,21 +1,24 @@
-/*******************************************************************************
- * sdrtrunk
- * Copyright (C) 2014-2017 Dennis Sheirer
+/*
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2019 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>
- *
- ******************************************************************************/
+ */
 package io.github.dsheirer.module.decode.fleetsync2;
 
 import io.github.dsheirer.channel.state.DecoderState;
@@ -31,7 +34,6 @@ import io.github.dsheirer.module.decode.fleetsync2.identifier.FleetsyncIdentifie
 import io.github.dsheirer.module.decode.fleetsync2.message.Fleetsync2Message;
 import io.github.dsheirer.protocol.Protocol;
 
-import java.util.Iterator;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -56,6 +58,7 @@ public class Fleetsync2DecoderState extends DecoderState
     @Override
     public void reset()
     {
+        super.reset();
         mIdents.clear();
     }
 
@@ -140,7 +143,7 @@ public class Fleetsync2DecoderState extends DecoderState
     {
         switch(event.getEvent())
         {
-            case RESET:
+            case REQUEST_RESET:
                 reset();
                 break;
             default:
@@ -163,11 +166,9 @@ public class Fleetsync2DecoderState extends DecoderState
         }
         else
         {
-            Iterator<FleetsyncIdentifier> it = mIdents.iterator();
 
-            while(it.hasNext())
-            {
-                sb.append("  ").append(it.next().formatted()).append("\n");
+            for (FleetsyncIdentifier mIdent : mIdents) {
+                sb.append("  ").append(mIdent.formatted()).append("\n");
             }
         }
 

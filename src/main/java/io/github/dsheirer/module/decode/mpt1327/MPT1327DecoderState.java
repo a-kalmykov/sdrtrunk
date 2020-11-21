@@ -1,21 +1,23 @@
 /*
- * ******************************************************************************
- * sdrtrunk
- * Copyright (C) 2014-2019 Dennis Sheirer
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2019 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>
- * *****************************************************************************
  */
 package io.github.dsheirer.module.decode.mpt1327;
 
@@ -40,7 +42,6 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.TreeSet;
 
@@ -57,26 +58,30 @@ public class MPT1327DecoderState extends DecoderState
     private ChannelType mChannelType;
 
     private long mFrequency = 0;
-    private long mCallTimeout;
+    private long mCallTimeoutMilliseconds;
     private MPT1327TrafficChannelManager mMPT1327TrafficChannelManager;
 
     /**
      * Constructs an MPT-1327 decoder state with an optional traffic channel manager for allocating traffic channels
-     * when go to channel (GTC) messages are detected.
+     * when go to channel (GTC) messages are detected.  This constructor assumes that channel type is STANDARD.
+     *
+     * @param trafficChannelManager for managing MPT1327 Traffic Channels
+     * @param callTimeoutMilliseconds for when traffic channels should automatically be stopped.
      */
-    public MPT1327DecoderState(MPT1327TrafficChannelManager trafficChannelManager, ChannelType channelType, long callTimeout)
+    public MPT1327DecoderState(MPT1327TrafficChannelManager trafficChannelManager, ChannelType channelType,
+                               long callTimeoutMilliseconds)
     {
         mMPT1327TrafficChannelManager = trafficChannelManager;
         mChannelType = channelType;
-        mCallTimeout = callTimeout;
+        mCallTimeoutMilliseconds = callTimeoutMilliseconds;
     }
 
     /**
      * Constructs an MPT1327 decoder state that does not allocate traffic channels
      */
-    public MPT1327DecoderState(ChannelType channelType, long callTimeout)
+    public MPT1327DecoderState(ChannelType channelType, long callTimeoutMilliseconds)
     {
-        this(null, channelType, callTimeout);
+        this(null, channelType, callTimeoutMilliseconds);
     }
 
     @Override
@@ -88,11 +93,6 @@ public class MPT1327DecoderState extends DecoderState
     public ChannelType getChannelType()
     {
         return mChannelType;
-    }
-
-    public void dispose()
-    {
-        super.dispose();
     }
 
     @Override
@@ -200,7 +200,10 @@ public class MPT1327DecoderState extends DecoderState
                     case GTC:
                         if(mMPT1327TrafficChannelManager != null)
                         {
-                            mMPT1327TrafficChannelManager.processChannelGrant(mpt);
+                            MutableIdentifierCollection ic = new MutableIdentifierCollection(getIdentifierCollection().getIdentifiers());
+                            ic.remove(IdentifierClass.USER);
+                            ic.update(mpt.getIdentifiers());
+                            mMPT1327TrafficChannelManager.processChannelGrant(mpt, ic);
                         }
                         else
                         {
@@ -248,7 +251,7 @@ public class MPT1327DecoderState extends DecoderState
                         {
                             //When we receive a MAINT message and we're configured as a standard channel, apply the call
                             // timeout specified by the user.  Otherwise we'll be using the shorter default call timeout
-                            broadcast(new ChangeChannelTimeoutEvent(this, mChannelType, mCallTimeout));
+                            broadcast(new ChangeChannelTimeoutEvent(this, mChannelType, mCallTimeoutMilliseconds));
 
                             MutableIdentifierCollection ic = new MutableIdentifierCollection(getIdentifierCollection().getIdentifiers());
                             ic.remove(IdentifierClass.USER);
@@ -270,15 +273,21 @@ public class MPT1327DecoderState extends DecoderState
 
     public void reset()
     {
+        super.reset();
         mIdents.clear();
-
         resetState();
     }
 
     @Override
     public void start()
     {
-
+        //Send call start event for traffic channels to unsquelch the audio.  Decoded return to channel message
+        //or fade timeout expire will end the call event.
+        if(mChannelType == ChannelType.TRAFFIC)
+        {
+            //Broadcast a start call event so the squelch kicks on and the audio path opens
+            broadcast(new DecoderStateEvent(this, Event.START, State.CALL));
+        }
     }
 
     @Override
@@ -306,7 +315,7 @@ public class MPT1327DecoderState extends DecoderState
         if(mChannelType == ChannelType.STANDARD)
         {
             broadcast(new ChangeChannelTimeoutEvent(this, mChannelType,
-                DecodeConfiguration.DEFAULT_CALL_TIMEOUT_SECONDS * 1000));
+                DecodeConfiguration.DEFAULT_CALL_TIMEOUT_DELAY_SECONDS * 1000));
         }
     }
 
@@ -403,12 +412,7 @@ public class MPT1327DecoderState extends DecoderState
         {
             sb.append("\n");
 
-            Iterator<String> it = mIdents.iterator();
-
-            while(it.hasNext())
-            {
-                String ident = it.next();
-
+            for (String ident : mIdents) {
                 sb.append(ident);
                 sb.append("\n");
             }
@@ -422,10 +426,10 @@ public class MPT1327DecoderState extends DecoderState
     {
         switch(event.getEvent())
         {
-            case RESET:
+            case REQUEST_RESET:
                 resetState();
                 break;
-            case SOURCE_FREQUENCY:
+            case NOTIFICATION_SOURCE_FREQUENCY:
                 mFrequency = event.getFrequency();
                 break;
             default:

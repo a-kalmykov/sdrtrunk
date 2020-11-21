@@ -1,7 +1,7 @@
 /*
  * ******************************************************************************
  * sdrtrunk
- * Copyright (C) 2014-2018 Dennis Sheirer
+ * Copyright (C) 2014-2019 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,7 @@
 package io.github.dsheirer.module.decode.ltrstandard.channel;
 
 import io.github.dsheirer.channel.IChannelDescriptor;
-import io.github.dsheirer.module.decode.p25.message.IFrequencyBand;
+import io.github.dsheirer.module.decode.p25.phase1.message.IFrequencyBand;
 import io.github.dsheirer.protocol.Protocol;
 
 public class LtrChannel implements IChannelDescriptor, Comparable<LtrChannel>
@@ -83,7 +83,7 @@ public class LtrChannel implements IChannelDescriptor, Comparable<LtrChannel>
     @Override
     public Protocol getProtocol()
     {
-        return Protocol.LTR_STANDARD;
+        return Protocol.LTR;
     }
 
     @Override
@@ -101,5 +101,11 @@ public class LtrChannel implements IChannelDescriptor, Comparable<LtrChannel>
     public int compareTo(LtrChannel o)
     {
         return Integer.compare(getChannel(), o.getChannel());
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof LtrChannel)) return false;
+        return compareTo((LtrChannel) o) == 0;
     }
 }

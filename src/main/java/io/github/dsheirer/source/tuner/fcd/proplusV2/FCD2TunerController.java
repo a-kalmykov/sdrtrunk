@@ -19,7 +19,6 @@
 package io.github.dsheirer.source.tuner.fcd.proplusV2;
 
 import io.github.dsheirer.source.SourceException;
-import io.github.dsheirer.source.tuner.MixerTunerDataLine;
 import io.github.dsheirer.source.tuner.MixerTunerType;
 import io.github.dsheirer.source.tuner.TunerClass;
 import io.github.dsheirer.source.tuner.TunerType;
@@ -31,6 +30,7 @@ import org.slf4j.LoggerFactory;
 import org.usb4java.Device;
 import org.usb4java.DeviceDescriptor;
 
+import javax.sound.sampled.TargetDataLine;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -42,10 +42,10 @@ public class FCD2TunerController extends FCDTunerController
     public static final int MAXIMUM_TUNABLE_FREQUENCY = 2050000000;
     public static final int SAMPLE_RATE = 192000;
 
-    public FCD2TunerController(MixerTunerDataLine mixerTDL, Device device, DeviceDescriptor descriptor)
+    public FCD2TunerController(TargetDataLine mixerTDL, Device device, DeviceDescriptor descriptor)
     {
-        super(mixerTDL, device, descriptor, MixerTunerType.FUNCUBE_DONGLE_PRO_PLUS.getDisplayString(),
-            MINIMUM_TUNABLE_FREQUENCY, MAXIMUM_TUNABLE_FREQUENCY, MixerTunerType.FUNCUBE_DONGLE_PRO_PLUS.getAudioFormat());
+        super(MixerTunerType.FUNCUBE_DONGLE_PRO_PLUS, mixerTDL, device, descriptor,
+            MINIMUM_TUNABLE_FREQUENCY, MAXIMUM_TUNABLE_FREQUENCY);
     }
 
     public void init() throws SourceException
@@ -83,6 +83,8 @@ public class FCD2TunerController extends FCDTunerController
 
     public void setLNAGain(boolean enabled) throws SourceException
     {
+        mLock.lock();
+
         try
         {
             send(FCDCommand.APP_SET_LNA_GAIN, enabled ? 1 : 0);
@@ -91,10 +93,16 @@ public class FCD2TunerController extends FCDTunerController
         {
             throw new SourceException("error while setting LNA Gain", e);
         }
+        finally
+        {
+            mLock.unlock();
+        }
     }
 
     public void setMixerGain(boolean enabled) throws SourceException
     {
+        mLock.lock();
+
         try
         {
             send(FCDCommand.APP_SET_MIXER_GAIN, enabled ? 1 : 0);
@@ -102,6 +110,10 @@ public class FCD2TunerController extends FCDTunerController
         catch(Exception e)
         {
             throw new SourceException("error while setting Mixer Gain", e);
+        }
+        finally
+        {
+            mLock.unlock();
         }
     }
 
@@ -159,6 +171,8 @@ public class FCD2TunerController extends FCDTunerController
 
     public void setDCCorrection(int value)
     {
+        mLock.lock();
+
         try
         {
             send(FCDCommand.APP_SET_DC_CORRECTION, value);
@@ -166,6 +180,10 @@ public class FCD2TunerController extends FCDTunerController
         catch(Exception e)
         {
             mLog.error("error setting dc correction to [" + value + "]", e);
+        }
+        finally
+        {
+            mLock.unlock();
         }
     }
 
@@ -191,6 +209,8 @@ public class FCD2TunerController extends FCDTunerController
 
     public void setIQCorrection(int value)
     {
+        mLock.lock();
+
         try
         {
             send(FCDCommand.APP_SET_IQ_CORRECTION, value);
@@ -198,6 +218,10 @@ public class FCD2TunerController extends FCDTunerController
         catch(Exception e)
         {
             mLog.error("error setting IQ correction to [" + value + "]", e);
+        }
+        finally
+        {
+            mLock.unlock();
         }
     }
 }

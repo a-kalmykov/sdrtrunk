@@ -1,7 +1,29 @@
+/*
+ *
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2019 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
+ *
+ *
+ */
+
 package io.github.dsheirer.dsp.filter.design;
 
+import io.github.dsheirer.dsp.filter.FilterFactory;
 import io.github.dsheirer.dsp.filter.fir.FIRFilterSpecification;
-import io.github.dsheirer.dsp.filter.fir.remez.RemezFIRFilterDesigner;
 import javafx.application.Application;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
@@ -61,42 +83,52 @@ public class FilterViewer extends Application
 //            .passBandRipple(0.01)
 //            .build();
 
-        FIRFilterSpecification specification = FIRFilterSpecification.lowPassBuilder()
-            .sampleRate(25000.0)
-            .gridDensity(16)
-            .passBandCutoff(11800)
-            .passBandAmplitude(1.0)
-            .passBandRipple(0.01)
-            .stopBandStart(12400)
-            .stopBandAmplitude(0.0)
-            .stopBandRipple(0.01)
-            .build();
+//        FIRFilterSpecification specification = FIRFilterSpecification.lowPassBuilder()
+//            .sampleRate(50000.0)
+//            .passBandCutoff(6500)
+//            .passBandAmplitude(1.0)
+//            .passBandRipple(0.005)
+//            .stopBandAmplitude(0.0)
+//            .stopBandStart(7200)
+//            .stopBandRipple(0.01)
+//            .build();
 
         float[] taps = null;
 
-//        try
-//        {
-//            taps = FilterFactory.getSincM2Synthesizer(12500.0, 2, 19);
-//            taps = FilterFactory.getSincFilter(25000.0, 12500.0, 2, 19, Window.WindowType.BLACKMAN_HARRIS_7, true);
-//        }
-//        catch(FilterDesignException fde)
-//        {
-//            mLog.error("Error");
-//        }
+        boolean rrc = false;
 
-        try
+        if(rrc)
         {
-            RemezFIRFilterDesigner designer = new RemezFIRFilterDesigner(specification);
+            double sampleRate = 50000.0;
+            int symbolRate = 4800;
+            double samplesPerSymbol = sampleRate / symbolRate / 2;
+            float alpha = 0.25f;
+            int symbolCount = 20;
 
-            if(designer.isValid())
+            taps = FilterFactory.getRootRaisedCosine(samplesPerSymbol, symbolCount, alpha);
+        }
+        else
+        {
+            FIRFilterSpecification specification = FIRFilterSpecification.lowPassBuilder()
+                    .sampleRate(50000)
+                    .passBandCutoff(4500)
+                    .passBandAmplitude(1.0)
+                    .passBandRipple(0.1)
+                    .stopBandAmplitude(0.0)
+                    .stopBandStart(7000)
+                    .stopBandRipple(0.01)
+                    .build();
+
+            try
             {
-                taps = designer.getImpulseResponse();
+                taps = FilterFactory.getTaps(specification);//
+            }
+            catch(Exception fde) //FilterDesignException
+            {
+                mLog.error("Couldn't design low pass baseband filter for sample rate");
             }
         }
-        catch(FilterDesignException fde)
-        {
-            mLog.error("Filter design error", fde);
-        }
+
 
         if(taps == null)
         {

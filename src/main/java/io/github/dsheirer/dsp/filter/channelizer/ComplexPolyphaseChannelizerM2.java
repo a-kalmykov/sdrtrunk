@@ -24,10 +24,12 @@ import io.github.dsheirer.sample.IOverflowListener;
 import io.github.dsheirer.sample.Listener;
 import io.github.dsheirer.sample.buffer.ReusableChannelResultsBuffer;
 import io.github.dsheirer.sample.buffer.ReusableComplexBuffer;
+import org.apache.commons.math3.util.FastMath;
 import org.jtransforms.fft.FloatFFT_1D;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.text.DecimalFormat;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -62,7 +64,7 @@ import java.util.List;
 public class ComplexPolyphaseChannelizerM2 extends AbstractComplexPolyphaseChannelizer
 {
     private final static Logger mLog = LoggerFactory.getLogger(ComplexPolyphaseChannelizerM2.class);
-
+    private static final DecimalFormat DECIMAL_FORMAT = new DecimalFormat("0.0");
     private static final int DEFAULT_MINIMUM_CHANNEL_BANDWIDTH = 25000;
 
     //Sized at 152 buffers a second where max = 5 seconds and reset = 2 seconds worth of buffers
@@ -70,8 +72,6 @@ public class ComplexPolyphaseChannelizerM2 extends AbstractComplexPolyphaseChann
     private FloatFFT_1D mFFT;
     private float[] mInlineSamples;
     private float[] mInlineFilter;
-    private float[] mInlineInterimOutput;
-    private float[] mFilterAccumulator;
     private boolean mTopBlockIndicator = true;
     private int[] mTopBlockMap;
     private int[] mMiddleBlockMap;
@@ -99,7 +99,7 @@ public class ComplexPolyphaseChannelizerM2 extends AbstractComplexPolyphaseChann
             throw new IllegalArgumentException("Channel count must be an even multiple of the over-sample rate (2x)");
         }
 
-        mTapsPerChannel = (int)Math.ceil((double)taps.length / (double)channelCount);
+        mTapsPerChannel = (int) FastMath.ceil((double)taps.length / (double)channelCount);
 
         init(taps);
     }
@@ -154,7 +154,9 @@ public class ComplexPolyphaseChannelizerM2 extends AbstractComplexPolyphaseChann
             channels--;
         }
 
-        mLog.debug("Sample Rate [" + sampleRate + "] providing [" + channels + "] channels at [" + (sampleRate / (double)channels) + "] Hz each");
+        mLog.info("Sample Rate [" + DECIMAL_FORMAT.format(sampleRate) + "] providing [" + channels +
+            "] channels at [" + DECIMAL_FORMAT.format(sampleRate / (double)channels) + "] Hz each");
+
         return channels;
     }
 
@@ -201,9 +203,10 @@ public class ComplexPolyphaseChannelizerM2 extends AbstractComplexPolyphaseChann
             {
                 samplesToCopy = mSamplesPerBlock - mSampleBufferPointer;
 
-                if((samples.length - samplesPointer) < samplesToCopy)
+                int samplesDiff = samples.length - samplesPointer;
+                if(samplesDiff < samplesToCopy)
                 {
-                    samplesToCopy = (samples.length - samplesPointer);
+                    samplesToCopy = samplesDiff;
                 }
 
                 System.arraycopy(samples, samplesPointer, mInlineSamples, mSampleBufferPointer, samplesToCopy);
@@ -333,13 +336,16 @@ public class ComplexPolyphaseChannelizerM2 extends AbstractComplexPolyphaseChann
      */
     private void process(ReusableChannelResultsBuffer channelResultsBuffer)
     {
+        int bufferLength = getSubChannelCount() * mTapsPerChannel;
+        float[] inlineInterimOutput = new float[bufferLength];
+
         //Multiply each of the samples by the corresponding filter tap
         for(int x = 0; x < mInlineSamples.length; x++)
         {
-            mInlineInterimOutput[x] = mInlineSamples[x] * mInlineFilter[x];
+            inlineInterimOutput[x] = mInlineSamples[x] * mInlineFilter[x];
         }
 
-        Arrays.fill(mFilterAccumulator, 0.0f);
+        float[] filterAccumulator = new float[getSubChannelCount()];
 
         int tapOffset = 0;
 
@@ -350,7 +356,7 @@ public class ComplexPolyphaseChannelizerM2 extends AbstractComplexPolyphaseChann
 
             for(int channel = 0; channel < getSubChannelCount(); channel++)
             {
-                mFilterAccumulator[channel] += mInlineInterimOutput[tapOffset + channel];
+                filterAccumulator[channel] += inlineInterimOutput[tapOffset + channel];
             }
         }
 
@@ -360,14 +366,14 @@ public class ComplexPolyphaseChannelizerM2 extends AbstractComplexPolyphaseChann
         {
             for(int x = 0; x < getSubChannelCount(); x++)
             {
-                processed[x] = mFilterAccumulator[mTopBlockMap[x]];
+                processed[x] = filterAccumulator[mTopBlockMap[x]];
             }
         }
         else
         {
             for(int x = 0; x < getSubChannelCount(); x++)
             {
-                processed[x] = mFilterAccumulator[mMiddleBlockMap[x]];
+                processed[x] = filterAccumulator[mMiddleBlockMap[x]];
             }
         }
 
@@ -391,8 +397,6 @@ public class ComplexPolyphaseChannelizerM2 extends AbstractComplexPolyphaseChann
         mMiddleBlockMap = getMiddleBlockMap(channelCount);
         mInlineFilter = getAlignedFilter(coefficients, channelCount, mTapsPerChannel);
         mInlineSamples = new float[bufferLength];
-        mInlineInterimOutput = new float[bufferLength];
-        mFilterAccumulator = new float[getSubChannelCount()];
     }
 
     /**
@@ -410,32 +414,20 @@ public class ComplexPolyphaseChannelizerM2 extends AbstractComplexPolyphaseChann
             //dispatcher thread that is part of this continuous buffer processor.  We perform an IFFT on each
             //channel results array contained in each results buffer and then dispatch the buffer
             //so that it can be distributed to each channel listener.
-            setListener(new Listener<List<ReusableChannelResultsBuffer>>()
-            {
-                @Override
-                public void receive(List<ReusableChannelResultsBuffer> buffers)
+            setListener(buffers -> {
+                for(ReusableChannelResultsBuffer buffer: buffers)
                 {
-                    for(ReusableChannelResultsBuffer buffer: buffers)
+                    for(float[] channelResults: buffer.getChannelResults())
                     {
-                        for(float[] channelResults: buffer.getChannelResults())
-                        {
-                            //Rotate each of the channels to the correct phase using the IFFT
-                            mFFT.complexInverse(channelResults, true);
-                        }
-
-                        dispatch(buffer);
+                        //Rotate each of the channels to the correct phase using the IFFT
+                        mFFT.complexInverse(channelResults, true);
                     }
+
+                    dispatch(buffer);
                 }
             });
 
-            setOverflowListener(new IOverflowListener()
-            {
-                @Override
-                public void sourceOverflow(boolean overflow)
-                {
-                    mLog.debug("IFFTProcessor overflow changed - overflow:" + overflow);
-                }
-            });
+            setOverflowListener(overflow -> mLog.debug("IFFTProcessor overflow changed - overflow:" + overflow));
         }
 
         /**

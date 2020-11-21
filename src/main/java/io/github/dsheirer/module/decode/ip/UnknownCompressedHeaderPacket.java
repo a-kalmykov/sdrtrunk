@@ -1,7 +1,7 @@
 /*
  * ******************************************************************************
  * sdrtrunk
- * Copyright (C) 2014-2018 Dennis Sheirer
+ * Copyright (C) 2014-2019 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,7 +21,13 @@
 package io.github.dsheirer.module.decode.ip;
 
 import io.github.dsheirer.bits.BinaryMessage;
-import io.github.dsheirer.module.decode.p25.message.pdu.packet.sndcp.SNDCPPacketHeader;
+import io.github.dsheirer.identifier.Identifier;
+import io.github.dsheirer.module.decode.p25.phase1.message.pdu.packet.sndcp.SNDCPPacketHeader;
+import java.util.Collections;
+import java.util.List;
+
+import java.util.Collections;
+import java.util.List;
 
 public class UnknownCompressedHeaderPacket implements IPacket
 {
@@ -86,5 +92,11 @@ public class UnknownCompressedHeaderPacket implements IPacket
     public boolean hasPayload()
     {
         return false;
+    }
+
+    @Override
+    public List<Identifier> getIdentifiers()
+    {
+        return Collections.emptyList();
     }
 }

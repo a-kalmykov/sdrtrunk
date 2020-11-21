@@ -1,20 +1,24 @@
-/*******************************************************************************
- *     SDR Trunk 
- *     Copyright (C) 2014-2016 Dennis Sheirer
+/*
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2019 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
  *
- *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <http://www.gnu.org/licenses/>
- ******************************************************************************/
+ */
 package io.github.dsheirer.channel.state;
 
 import java.util.EnumSet;
@@ -39,7 +43,9 @@ public enum State
                        state == DATA ||
                        state == ENCRYPTED ||
                        state == FADE ||
-                       state == TEARDOWN;
+                       state == IDLE ||
+                       state == TEARDOWN ||
+                       state == RESET;
             }
         },
     /**
@@ -55,7 +61,9 @@ public enum State
                        state == DATA ||
                        state == ENCRYPTED ||
                        state == FADE ||
-                       state == TEARDOWN;
+                       state == IDLE ||
+                       state == TEARDOWN ||
+                       state == RESET;
             }
         },
     /**
@@ -67,7 +75,8 @@ public enum State
             public boolean canChangeTo(State state)
             {
                 return state == IDLE ||
-                       state == FADE;
+                       state == FADE ||
+                       state == RESET;
             }
         },
     /**
@@ -83,6 +92,7 @@ public enum State
                        state == CONTROL ||
                        state == ENCRYPTED ||
                        state == FADE ||
+                       state == RESET ||
                        state == TEARDOWN;
             }
         },
@@ -95,7 +105,8 @@ public enum State
             public boolean canChangeTo(State state)
             {
                 return state == FADE ||
-                       state == TEARDOWN;
+                       state == TEARDOWN ||
+                       state == RESET;
             }
         },
     /**
@@ -112,7 +123,8 @@ public enum State
             }
         },
     /**
-     * Indicates the channel is idle and not actively decoding any messages
+     * Indicates the channel is idle and not actively decoding any messages or in a multiple timeslot decoder this
+     * state reflects active decoding that indicates the timeslot is idle.
      */
     IDLE("IDLE")
         {
@@ -150,8 +162,8 @@ public enum State
 
     private String mDisplayValue;
 
-    public static final EnumSet<State> CALL_STATES = EnumSet.of(ACTIVE, CALL, CONTROL, DATA, ENCRYPTED);
-    public static final EnumSet<State> IDLE_STATES = EnumSet.of(IDLE, FADE);
+    public static final EnumSet<State> SINGLE_CHANNEL_ACTIVE_STATES = EnumSet.of(ACTIVE, CALL, CONTROL, DATA, ENCRYPTED);
+    public static final EnumSet<State> MULTI_CHANNEL_ACTIVE_STATES = EnumSet.of(ACTIVE, CALL, CONTROL, DATA, ENCRYPTED, IDLE);
 
     private State(String displayValue)
     {
@@ -159,17 +171,6 @@ public enum State
     }
 
     public abstract boolean canChangeTo(State state);
-
-    /**
-     * Indicates that this state is an active (ie decoding) state and is one of the states
-     * enumerated in the CALL_STATES enumeration set.
-     *
-     * @return true if this state is an active state
-     */
-    public boolean isActiveState()
-    {
-        return CALL_STATES.contains(this);
-    }
 
     public String getDisplayValue()
     {

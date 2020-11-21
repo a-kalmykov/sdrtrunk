@@ -1,21 +1,23 @@
 /*
- * ******************************************************************************
- * sdrtrunk
- * Copyright (C) 2014-2019 Dennis Sheirer
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2020 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>
- * *****************************************************************************
  */
 package io.github.dsheirer.source.tuner;
 
@@ -36,7 +38,7 @@ import org.slf4j.LoggerFactory;
  * Tuner provides an interface to a software or hardware tuner controller that provides I/Q sample data coupled with a
  * channel source manager to provide access to Digital Drop Channel (DDC) resources.
  */
-public abstract class Tuner implements ISourceEventProcessor
+public abstract class Tuner implements ISourceEventProcessor, ITunerErrorListener
 {
     private final static Logger mLog = LoggerFactory.getLogger(Tuner.class);
 
@@ -45,40 +47,88 @@ public abstract class Tuner implements ISourceEventProcessor
     private TunerController mTunerController;
     private TunerFrequencyErrorMonitor mTunerFrequencyErrorMonitor;
     private String mName;
+    private String mErrorMessage;
 
-    /**
-     * Abstract tuner class.
-     * @param name of the tuner
-     * @param tunerController for the tuner
-     */
-    public Tuner(String name, TunerController tunerController, UserPreferences userPreferences)
+    public Tuner(String name, TunerController tunerController)
     {
         mName = name;
         mTunerController = tunerController;
         //Register to receive frequency and sample rate change notifications
         mTunerController.addListener(this::process);
+        mTunerController.setTunerErrorListener(this);
+        mTunerFrequencyErrorMonitor = new TunerFrequencyErrorMonitor(this);
+        mTunerFrequencyErrorMonitor.start();
+    }
+
+    /**
+     * Abstract tuner class.
+     * @param name of the tuner
+     * @param tunerController for the tuner
+     * @param userPreferences to discover preferred channelizer type
+     */
+    public Tuner(String name, TunerController tunerController, UserPreferences userPreferences)
+    {
+        this(name, tunerController);
 
         ChannelizerType channelizerType = userPreferences.getTunerPreference().getChannelizerType();
-
         if(channelizerType == ChannelizerType.POLYPHASE)
         {
-            mChannelSourceManager = new PolyphaseChannelSourceManager(mTunerController);
+            setChannelSourceManager(new PolyphaseChannelSourceManager(mTunerController));
         }
         else if(channelizerType == ChannelizerType.HETERODYNE)
         {
-            mChannelSourceManager = new HeterodyneChannelSourceManager(mTunerController);
+            setChannelSourceManager(new HeterodyneChannelSourceManager(mTunerController));
         }
         else
         {
             throw new IllegalArgumentException("Unrecognized channelizer type: " + channelizerType);
         }
+    }
 
+    /**
+     * Sets the channel source manager
+     * @param manager to use
+     */
+    protected void setChannelSourceManager(ChannelSourceManager manager)
+    {
+        mChannelSourceManager = manager;
 
         //Register to receive channel count change notifications
         mChannelSourceManager.addSourceEventListener(this::process);
+    }
 
-        mTunerFrequencyErrorMonitor = new TunerFrequencyErrorMonitor(this);
-        mTunerFrequencyErrorMonitor.start();
+    /**
+     * Sets this tuner to an error state with the errorMessage description.
+     * @param errorMessage describing the error state
+     */
+    public void setErrorMessage(String errorMessage)
+    {
+        mLog.info("[" + getName() + "] tuner is now disabled for error [" + errorMessage + "]");
+        mErrorMessage = errorMessage;
+        broadcast(new TunerEvent(this, Event.ERROR_STATE));
+        getChannelSourceManager().setErrorMessage(errorMessage);
+    }
+
+    /**
+     * Maximum number of bytes per second (MBps) produced by this tuner.
+     * @return Bytes Per Second (Bps)
+     */
+    public abstract int getMaximumUSBBitsPerSecond();
+
+    /**
+     * Optional error message that describes an error state.
+     */
+    public String getErrorMessage()
+    {
+        return mErrorMessage;
+    }
+
+    /**
+     * Indicates if this tuner has an error.
+     */
+    public boolean hasError()
+    {
+        return mErrorMessage != null;
     }
 
     @Override
@@ -104,6 +154,9 @@ public abstract class Tuner implements ISourceEventProcessor
                 break;
             case NOTIFICATION_MEASURED_FREQUENCY_ERROR_SYNC_LOCKED:
                 mTunerFrequencyErrorMonitor.receive(event);
+                break;
+            case NOTIFICATION_RECORDING_FILE_LOADED:
+                //ignore
                 break;
             default:
                 mLog.debug("Unrecognized Source Event: " + event.toString());
@@ -132,7 +185,7 @@ public abstract class Tuner implements ISourceEventProcessor
      */
     public String toString()
     {
-        return mName;
+        return mName + (hasError() ? mErrorMessage : "");
     }
 
     /**

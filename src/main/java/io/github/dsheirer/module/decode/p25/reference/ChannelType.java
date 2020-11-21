@@ -20,6 +20,9 @@
 
 package io.github.dsheirer.module.decode.p25.reference;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public enum ChannelType
 {
     TYPE_0(AccessType.FDMA, 12500, 1, Vocoder.HALF_RATE),
@@ -28,7 +31,7 @@ public enum ChannelType
     TYPE_3(AccessType.TDMA, 12500, 2, Vocoder.HALF_RATE),
     TYPE_4(AccessType.TDMA, 25000, 4, Vocoder.HALF_RATE),
     TYPE_5(AccessType.TDMA, 12500, 2, Vocoder.HALF_RATE), //HD8PSK simulcast
-    UNKNOWN(AccessType.UNKNOWN, 0, 0, Vocoder.HALF_RATE);
+    UNKNOWN(AccessType.UNKNOWN, 0, 1, Vocoder.HALF_RATE);
 
     private AccessType mAccessType;
     private int mBandwidth;
@@ -43,6 +46,8 @@ public enum ChannelType
         mVocoder = vocoder;
     }
 
+    private final static Logger mLog = LoggerFactory.getLogger(ChannelType.class);
+
     public String toString()
     {
         StringBuilder sb = new StringBuilder();
@@ -54,15 +59,15 @@ public enum ChannelType
             {
                 sb.append(" H-D8PSK");
             }
-            sb.append(" BW:" + mBandwidth);
-            sb.append(" TIMESLOTS:" + mSlotsPerCarrier);
-            sb.append(" VOCODER:" + mVocoder.name());
+            sb.append(" BW:").append(mBandwidth);
+            sb.append(" TIMESLOTS:").append(mSlotsPerCarrier);
+            sb.append(" VOCODER:").append(mVocoder.name());
         }
         else
         {
             sb.append("FDMA");
-            sb.append(" BW:" + mBandwidth);
-            sb.append(" VOCODER:" + mVocoder.name());
+            sb.append(" BW:").append(mBandwidth);
+            sb.append(" VOCODER:").append(mVocoder.name());
         }
 
         return sb.toString();

@@ -1,21 +1,23 @@
 /*
- * ******************************************************************************
- * sdrtrunk
- * Copyright (C) 2014-2019 Dennis Sheirer
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2019 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>
- * *****************************************************************************
  */
 package io.github.dsheirer.module.decode.event;
 
@@ -26,7 +28,7 @@ import io.github.dsheirer.alias.AliasList;
 import io.github.dsheirer.alias.AliasModel;
 import io.github.dsheirer.channel.IChannelDescriptor;
 import io.github.dsheirer.eventbus.MyEventBus;
-import io.github.dsheirer.icon.IconManager;
+import io.github.dsheirer.icon.IconModel;
 import io.github.dsheirer.identifier.Form;
 import io.github.dsheirer.identifier.Identifier;
 import io.github.dsheirer.identifier.IdentifierCollection;
@@ -51,6 +53,7 @@ import java.awt.Component;
 import java.awt.EventQueue;
 import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
@@ -62,28 +65,28 @@ public class DecodeEventPanel extends JPanel implements Listener<ProcessingChain
 
     private JTable mTable;
     private JTableColumnWidthMonitor mTableColumnWidthMonitor;
-    private DecodeEventModel mEmptyDecodeEventModel;
+    private DecodeEventModel mEventModel = new DecodeEventModel();
+    private DecodeEventHistory mCurrentEventHistory;
     private JScrollPane mEmptyScroller;
-    private IconManager mIconManager;
+    private IconModel mIconModel;
     private AliasModel mAliasModel;
     private UserPreferences mUserPreferences;
     private TimestampCellRenderer mTimestampCellRenderer;
 
     /**
      * View for call event table
-     * @param iconManager to display alias icons in table rows
+     * @param iconModel to display alias icons in table rows
      */
-    public DecodeEventPanel(IconManager iconManager, UserPreferences userPreferences, AliasModel aliasModel)
+    public DecodeEventPanel(IconModel iconModel, UserPreferences userPreferences, AliasModel aliasModel)
     {
-        MyEventBus.getEventBus().register(this);
+        MyEventBus.getGlobalEventBus().register(this);
 
         setLayout(new MigLayout("insets 0 0 0 0", "[grow,fill]", "[grow,fill]"));
-        mIconManager = iconManager;
+        mIconModel = iconModel;
         mAliasModel = aliasModel;
         mUserPreferences = userPreferences;
         mTimestampCellRenderer = new TimestampCellRenderer();
-        mEmptyDecodeEventModel = new DecodeEventModel();
-        mTable = new JTable(mEmptyDecodeEventModel);
+        mTable = new JTable(mEventModel);
         mTable.setAutoCreateRowSorter(true);
         mTable.setAutoResizeMode(JTable.AUTO_RESIZE_LAST_COLUMN);
         mTableColumnWidthMonitor = new JTableColumnWidthMonitor(mUserPreferences, mTable, TABLE_PREFERENCE_KEY);
@@ -93,6 +96,11 @@ public class DecodeEventPanel extends JPanel implements Listener<ProcessingChain
         add(mEmptyScroller);
     }
 
+    public void dispose()
+    {
+        MyEventBus.getGlobalEventBus().unregister(this);
+    }
+
     /**
      * Receives preference update notifications via the event bus
      * @param preferenceType that was updated
@@ -100,12 +108,11 @@ public class DecodeEventPanel extends JPanel implements Listener<ProcessingChain
     @Subscribe
     public void preferenceUpdated(PreferenceType preferenceType)
     {
-        if(preferenceType == PreferenceType.DECODE_EVENT || preferenceType == PreferenceType.IDENTIFIER)
+        if(preferenceType == PreferenceType.DECODE_EVENT || preferenceType == PreferenceType.TALKGROUP_FORMAT)
         {
             EventQueue.invokeLater(() -> mTimestampCellRenderer.updatePreferences());
         }
     }
-
 
     private void updateCellRenderers()
     {
@@ -128,20 +135,25 @@ public class DecodeEventPanel extends JPanel implements Listener<ProcessingChain
     }
 
     @Override
-    public void receive(ProcessingChain processingChain)
+    public void receive(final ProcessingChain processingChain)
     {
+        if(mCurrentEventHistory != null)
+        {
+            mCurrentEventHistory.removeListener(mEventModel);
+        }
+
         EventQueue.invokeLater(() -> {
-
-            //Dispose the current column width monitor and recreate after we swap out the table model
-            mTableColumnWidthMonitor.dispose();
-            mTable.setModel(processingChain != null ? processingChain.getDecodeEventModel() : mEmptyDecodeEventModel);
-
             if(processingChain != null)
             {
-                updateCellRenderers();
+                mCurrentEventHistory = processingChain.getDecodeEventHistory();
+                mEventModel.clearAndSet(mCurrentEventHistory.getItems());
+                processingChain.getDecodeEventHistory().addListener(mEventModel);
             }
-
-            mTableColumnWidthMonitor = new JTableColumnWidthMonitor(mUserPreferences, mTable, TABLE_PREFERENCE_KEY);
+            else
+            {
+                mCurrentEventHistory = null;
+                mEventModel.clearAndSet(Collections.emptyList());
+            }
         });
     }
 
@@ -269,7 +281,7 @@ public class DecodeEventPanel extends JPanel implements Listener<ProcessingChain
                                 }
                                 sb.append(Joiner.on(", ").skipNulls().join(aliases));
                                 color = aliases.get(0).getDisplayColor();
-                                icon = mIconManager.getIcon(aliases.get(0).getIconName(), IconManager.DEFAULT_ICON_SIZE);
+                                icon = mIconModel.getIcon(aliases.get(0).getIconName(), IconModel.DEFAULT_ICON_SIZE);
                             }
                         }
 
@@ -356,7 +368,7 @@ public class DecodeEventPanel extends JPanel implements Listener<ProcessingChain
      */
     public class FrequencyCellRenderer extends DefaultTableCellRenderer
     {
-        private DecimalFormat mFrequencyFormatter = new DecimalFormat("0.00000 MHz");
+        private DecimalFormat mFrequencyFormatter = new DecimalFormat("0.00000");
 
         public FrequencyCellRenderer()
         {
@@ -396,23 +408,6 @@ public class DecodeEventPanel extends JPanel implements Listener<ProcessingChain
         public ChannelDescriptorCellRenderer()
         {
             setHorizontalAlignment(JLabel.CENTER);
-        }
-
-        @Override
-        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column)
-        {
-            JLabel label = (JLabel)super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-
-            if(value instanceof IChannelDescriptor)
-            {
-                label.setText(value.toString());
-            }
-            else
-            {
-                label.setText(null);
-            }
-
-            return label;
         }
     }
 }

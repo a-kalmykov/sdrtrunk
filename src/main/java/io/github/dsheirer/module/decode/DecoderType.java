@@ -1,27 +1,28 @@
 /*
- * ******************************************************************************
- * sdrtrunk
- * Copyright (C) 2014-2018 Dennis Sheirer
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2019 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>
- * *****************************************************************************
  */
 package io.github.dsheirer.module.decode;
 
 import io.github.dsheirer.protocol.Protocol;
 
-import java.util.ArrayList;
 import java.util.EnumSet;
 
 /**
@@ -31,12 +32,14 @@ public enum DecoderType
 {
     //Primary Decoders
     AM("AM", "AM", Protocol.UNKNOWN),
-    LTR_STANDARD("LTR-Standard", "LTR", Protocol.LTR_STANDARD),
+    DMR("DMR","DMR", Protocol.DMR),
+    LTR("LTR", "LTR", Protocol.LTR),
     LTR_NET("LTR-Net", "LTR-Net", Protocol.LTR_NET),
     MPT1327("MPT1327", "MPT1327", Protocol.MPT1327),
     NBFM("NBFM", "NBFM", Protocol.UNKNOWN),
     PASSPORT("Passport", "Passport", Protocol.PASSPORT),
-    P25_PHASE1("P25 Phase I", "P25-1", Protocol.APCO25),
+    P25_PHASE1("P25 Phase 1", "P25-1", Protocol.APCO25),
+    P25_PHASE2("P25 Phase 2", "P25-2", Protocol.APCO25_PHASE2),
 
     //Auxiliary Decoders
     FLEETSYNC2("Fleetsync II", "Fleetsync2", Protocol.FLEETSYNC),
@@ -56,33 +59,39 @@ public enum DecoderType
     }
 
     /**
-     * Primary decoders
+     * Primary decoders that operate on I/Q sample streams
      */
-    public static EnumSet<DecoderType> getPrimaryDecoders()
-    {
-        return EnumSet.of(DecoderType.AM,
-            DecoderType.LTR_NET,
-            DecoderType.LTR_STANDARD,
-            DecoderType.MPT1327,
-            DecoderType.NBFM,
-            DecoderType.P25_PHASE1,
-            DecoderType.PASSPORT);
-    }
+    public static EnumSet<DecoderType> PRIMARY_DECODERS =
+        EnumSet.of(DecoderType.AM,
+        DecoderType.DMR,
+        DecoderType.LTR,
+        DecoderType.LTR_NET,
+        DecoderType.MPT1327,
+        DecoderType.NBFM,
+        DecoderType.P25_PHASE1,
+        DecoderType.P25_PHASE2,
+        DecoderType.PASSPORT);
 
     /**
-     * Available auxiliary decoders.
+     * Auxiliary decoders that operate on in-band signalling in the decoded audio channel
      */
-    public static ArrayList<DecoderType> getAuxDecoders()
-    {
-        ArrayList<DecoderType> decoders = new ArrayList<DecoderType>();
+    public static final EnumSet<DecoderType> AUX_DECODERS =
+        EnumSet.of(DecoderType.FLEETSYNC2,
+        DecoderType.LJ_1200,
+        DecoderType.MDC1200,
+        DecoderType.TAIT_1200);
 
-        decoders.add(DecoderType.FLEETSYNC2);
-        decoders.add(DecoderType.LJ_1200);
-        decoders.add(DecoderType.MDC1200);
-        decoders.add(DecoderType.TAIT_1200);
+    /**
+     * Decoders that produce a (recordable) bitstream
+     */
+    public static final EnumSet<DecoderType> BITSTREAM_DECODERS = EnumSet.of(DecoderType.DMR,
+        DecoderType.MPT1327, DecoderType.P25_PHASE1, DecoderType.P25_PHASE2);
 
-        return decoders;
-    }
+    /**
+     * Decoders that produce (recordable) MBE audio codec frames
+     */
+    public static final EnumSet<DecoderType> MBE_AUDIO_CODEC_DECODERS =
+        EnumSet.of(DecoderType.DMR, DecoderType.P25_PHASE1, DecoderType.P25_PHASE2);
 
     public Protocol getProtocol()
     {
@@ -103,5 +112,21 @@ public enum DecoderType
     public String toString()
     {
         return mDisplayString;
+    }
+
+    /**
+     * Indicates if the decoder type produces a (recordable) bitstream
+     */
+    public boolean providesBitstream()
+    {
+        return BITSTREAM_DECODERS.contains(this);
+    }
+
+    /**
+     * Indicates if the decoder type produces (recordable) MBE audio codec frames
+     */
+    public boolean providesMBEAudioFrames()
+    {
+        return MBE_AUDIO_CODEC_DECODERS.contains(this);
     }
 }

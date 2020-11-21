@@ -1,20 +1,24 @@
-/*******************************************************************************
- *     SDR Trunk 
- *     Copyright (C) 2014 Dennis Sheirer
- * 
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
- * 
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
- * 
- *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <http://www.gnu.org/licenses/>
- ******************************************************************************/
+/*
+ *
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2019 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
+ *
+ *
+ */
 package io.github.dsheirer.source.tuner;
 
 import javax.usb.UsbDeviceDescriptor;
@@ -36,6 +40,7 @@ public enum TunerClass
 	GIGABYTE_GTU7300( TunerType.FITIPOWER_FC0012, "1B80", "D393", "Gigabyte", "GT-U7300" ),
 	GTEK_T803( TunerType.FITIPOWER_FC0012, "1F4D", "B803", "GTek", "T803" ),
 	HACKRF_ONE( TunerType.HACKRF, "1D50", "6089", "Great Scott Gadgets", "HackRF One" ),
+	HACKRF_JAWBREAKER( TunerType.HACKRF, "1D50", "604B", "Great Scott Gadgets", "HackRF Jawbreaker" ),
 	RAD1O( TunerType.HACKRF, "1D50", "CC15", "Munich hackerspace", "Rad1o" ),
 	LIFEVIEW_LV5T_DELUXE( TunerType.FITIPOWER_FC0012, "1F4D", "C803", "Liveview", "LV5T Deluxe" ),
 	MYGICA_TD312( TunerType.FITIPOWER_FC0012, "1F4D", "D286", "MyGica", "TD312" ),
@@ -53,6 +58,7 @@ public enum TunerClass
 	TWINTECH_UT40( TunerType.FITIPOWER_FC0013, "1B80", "D3A4", "Twintech", "UT-40" ),
 	ZAAPA_ZTMINDVBZP( TunerType.FITIPOWER_FC0012, "1B80", "D398", "Zaapa", "ZT-MINDVBZP" ),
 	TEST_TUNER(TunerType.TEST, "0", "0", "ABC Tuners Inc.", "Model XYZ"),
+	RECORDING_TUNER(TunerType.RECORDING, "0", "0", "Recording Tuner", "Recording"),
 	UNKNOWN( TunerType.UNKNOWN, "0", "0", "Unknown Manufacturer", "Unknown Device" );
 	
 	private TunerType mTunerType;
@@ -190,6 +196,10 @@ public enum TunerClass
 				else if( productID == 52245 ) //CC15
 				{
 					retVal = HACKRF_ONE;
+				}
+				else if( productID == 24651 ) //604B
+				{
+					retVal = HACKRF_JAWBREAKER;
 				}
 				break;
 			case 8013: //1F4D

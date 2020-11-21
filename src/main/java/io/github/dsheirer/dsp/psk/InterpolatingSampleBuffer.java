@@ -1,34 +1,44 @@
-/*******************************************************************************
- * sdr-trunk
- * Copyright (C) 2014-2018 Dennis Sheirer
+/*
  *
- * This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
- * License as published by  the Free Software Foundation, either version 3 of the License, or  (at your option) any
- * later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2019 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- * This program is distributed in the hope that it will be useful,  but WITHOUT ANY WARRANTY; without even the implied
- * warranty of  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License  along with this program.
- * If not, see <http://www.gnu.org/licenses/>
- *
- ******************************************************************************/
+ */
 package io.github.dsheirer.dsp.psk;
 
 import io.github.dsheirer.dsp.filter.interpolator.RealInterpolator;
 import io.github.dsheirer.sample.complex.Complex;
+import org.apache.commons.math3.util.FastMath;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class InterpolatingSampleBuffer
 {
+    private final static Logger mLog = LoggerFactory.getLogger(InterpolatingSampleBuffer.class);
     private static final float MAXIMUM_DEVIATION_SAMPLES_PER_SYMBOL = 0.02f; // +/- 2% deviation
 
     private Complex mPrecedingSample = new Complex(0,0);
     private Complex mCurrentSample = new Complex(0,0);
     private Complex mMiddleSample = new Complex(0,0);
 
-    private float[] mDelayLineInphase;
-    private float[] mDelayLineQuadrature;
-    private int mDelayLinePointer = 0;
+    protected float[] mDelayLineInphase;
+    protected float[] mDelayLineQuadrature;
+    protected int mDelayLinePointer = 0;
     private int mTwiceSamplesPerSymbol;
 
     private float mSamplingPoint;
@@ -51,7 +61,7 @@ public class InterpolatingSampleBuffer
         mDetectedSamplesPerSymbol = samplesPerSymbol;
         mMaximumSamplesPerSymbol = samplesPerSymbol * (1.0f + MAXIMUM_DEVIATION_SAMPLES_PER_SYMBOL);
         mMinimumSamplesPerSymbol = samplesPerSymbol * (1.0f - MAXIMUM_DEVIATION_SAMPLES_PER_SYMBOL);
-        mTwiceSamplesPerSymbol = (int)Math.floor(2.0 * samplesPerSymbol);
+        mTwiceSamplesPerSymbol = (int) FastMath.floor(2.0 * samplesPerSymbol);
         mDelayLineInphase = new float[2 * mTwiceSamplesPerSymbol];
         mDelayLineQuadrature = new float[2 * mTwiceSamplesPerSymbol];
 
@@ -181,7 +191,7 @@ public class InterpolatingSampleBuffer
         }
         else
         {
-            int offset = (int)Math.floor(interpolation);
+            int offset = (int)FastMath.floor(interpolation);
             return mInterpolator.filter(mDelayLineInphase, mDelayLinePointer + offset, interpolation - offset);
         }
     }
@@ -199,7 +209,7 @@ public class InterpolatingSampleBuffer
         }
         else
         {
-            int offset = (int)Math.floor(interpolation);
+            int offset = (int)FastMath.floor(interpolation);
             return mInterpolator.filter(mDelayLineQuadrature, mDelayLinePointer + offset, interpolation - offset);
         }
     }
