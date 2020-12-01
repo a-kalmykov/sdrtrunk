@@ -1,7 +1,6 @@
 /*
- * ******************************************************************************
- * sdrtrunk
- * Copyright (C) 2014-2019 Dennis Sheirer
+ * *****************************************************************************
+ *  Copyright (C) 2014-2020 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,22 +14,29 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
- * *****************************************************************************
+ * ****************************************************************************
  */
 package io.github.dsheirer.module;
 
+import com.google.common.eventbus.EventBus;
 import io.github.dsheirer.alias.AliasModel;
-import io.github.dsheirer.audio.IAudioPacketListener;
-import io.github.dsheirer.audio.IAudioPacketProvider;
+import io.github.dsheirer.audio.AudioSegment;
+import io.github.dsheirer.audio.AudioSegmentBroadcaster;
+import io.github.dsheirer.audio.IAudioSegmentListener;
+import io.github.dsheirer.audio.IAudioSegmentProvider;
+import io.github.dsheirer.audio.codec.mbe.MBECallSequenceRecorder;
 import io.github.dsheirer.audio.squelch.ISquelchStateListener;
 import io.github.dsheirer.audio.squelch.ISquelchStateProvider;
-import io.github.dsheirer.audio.squelch.SquelchState;
-import io.github.dsheirer.channel.state.ChannelState;
+import io.github.dsheirer.audio.squelch.SquelchStateEvent;
+import io.github.dsheirer.channel.state.AbstractChannelState;
 import io.github.dsheirer.channel.state.DecoderState;
 import io.github.dsheirer.channel.state.DecoderStateEvent;
 import io.github.dsheirer.channel.state.IDecoderStateEventListener;
 import io.github.dsheirer.channel.state.IDecoderStateEventProvider;
+import io.github.dsheirer.channel.state.MultiChannelState;
+import io.github.dsheirer.channel.state.SingleChannelState;
 import io.github.dsheirer.controller.channel.Channel;
+import io.github.dsheirer.controller.channel.ChannelConfigurationChangeNotification;
 import io.github.dsheirer.controller.channel.ChannelEvent;
 import io.github.dsheirer.controller.channel.IChannelEventListener;
 import io.github.dsheirer.controller.channel.IChannelEventProvider;
@@ -40,12 +46,14 @@ import io.github.dsheirer.identifier.IdentifierUpdateProvider;
 import io.github.dsheirer.message.IMessage;
 import io.github.dsheirer.message.IMessageListener;
 import io.github.dsheirer.message.IMessageProvider;
-import io.github.dsheirer.module.decode.event.DecodeEventModel;
+import io.github.dsheirer.message.MessageHistory;
+import io.github.dsheirer.module.decode.event.DecodeEventHistory;
 import io.github.dsheirer.module.decode.event.IDecodeEvent;
 import io.github.dsheirer.module.decode.event.IDecodeEventListener;
 import io.github.dsheirer.module.decode.event.IDecodeEventProvider;
-import io.github.dsheirer.module.decode.event.MessageActivityModel;
+import io.github.dsheirer.module.decode.traffic.TrafficChannelManager;
 import io.github.dsheirer.module.log.EventLogger;
+import io.github.dsheirer.record.binary.BinaryRecorder;
 import io.github.dsheirer.record.wave.ComplexBufferWaveRecorder;
 import io.github.dsheirer.sample.Broadcaster;
 import io.github.dsheirer.sample.Listener;
@@ -54,7 +62,6 @@ import io.github.dsheirer.sample.buffer.IReusableBufferProvider;
 import io.github.dsheirer.sample.buffer.IReusableByteBufferListener;
 import io.github.dsheirer.sample.buffer.IReusableByteBufferProvider;
 import io.github.dsheirer.sample.buffer.IReusableComplexBufferListener;
-import io.github.dsheirer.sample.buffer.ReusableAudioPacket;
 import io.github.dsheirer.sample.buffer.ReusableBufferBroadcaster;
 import io.github.dsheirer.sample.buffer.ReusableByteBuffer;
 import io.github.dsheirer.sample.buffer.ReusableComplexBuffer;
@@ -72,6 +79,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -97,10 +105,10 @@ public class ProcessingChain implements Listener<ChannelEvent>
 {
     private final static Logger mLog = LoggerFactory.getLogger(ProcessingChain.class);
 
-    private ReusableBufferBroadcaster<ReusableAudioPacket> mAudioPacketBroadcaster = new ReusableBufferBroadcaster<>();
     private ReusableBufferBroadcaster<ReusableFloatBuffer> mDemodulatedAudioBufferBroadcaster = new ReusableBufferBroadcaster();
     private ReusableBufferBroadcaster<ReusableComplexBuffer> mBasebandComplexBufferBroadcaster = new ReusableBufferBroadcaster();
     private ReusableBufferBroadcaster<ReusableByteBuffer> mDemodulatedBitstreamBufferBroadcaster = new ReusableBufferBroadcaster();
+    private Broadcaster<AudioSegment> mAudioSegmentBroadcaster = new AudioSegmentBroadcaster<>();
     private Broadcaster<IDecodeEvent> mDecodeEventBroadcaster = new Broadcaster<>();
     private Broadcaster<ChannelEvent> mChannelEventBroadcaster = new Broadcaster<>();
     private Broadcaster<DecoderStateEvent> mDecoderStateEventBroadcaster = new Broadcaster<>();
@@ -108,70 +116,120 @@ public class ProcessingChain implements Listener<ChannelEvent>
     private Broadcaster<IdentifierUpdateNotification> mIdentifierUpdateNotificationBroadcaster = new Broadcaster<>();
     private Broadcaster<SourceEvent> mSourceEventBroadcaster = new Broadcaster<>();
     private Broadcaster<IMessage> mMessageBroadcaster = new Broadcaster<>();
-    private Broadcaster<SquelchState> mSquelchStateBroadcaster = new Broadcaster<>();
-
+    private Broadcaster<SquelchStateEvent> mSquelchStateEventBroadcaster = new Broadcaster<>();
     private AtomicBoolean mRunning = new AtomicBoolean();
-
-    protected Source mSource;
     private List<Module> mModules = new ArrayList<>();
-    private DecodeEventModel mDecodeEventModel;
-    private ChannelState mChannelState;
-    private MessageActivityModel mMessageActivityModel;
+    private DecodeEventHistory mDecodeEventHistory = new DecodeEventHistory(500);
+    private MessageHistory mMessageHistory = new MessageHistory(500);
+    private AbstractChannelState mChannelState;
+    private EventBus mEventBus;
+    protected Source mSource;
 
     /**
      * Creates a processing chain for managing a set of modules
      *
-     * @param channel
+     * @param channel with configuration details for this processing chain
+     * @param aliasModel for looking up aliases
      */
     public ProcessingChain(Channel channel, AliasModel aliasModel)
     {
-        mChannelState = new ChannelState(channel, aliasModel);
+        mEventBus = new EventBus("Processing Chain Event Bus - Channel: " + channel.getName());
+
+        if(channel.getDecodeConfiguration().getTimeslotCount() == 1)
+        {
+            mChannelState = new SingleChannelState(channel, aliasModel);
+        }
+        else
+        {
+            mChannelState = new MultiChannelState(channel, aliasModel, channel.getDecodeConfiguration().getTimeslots());
+        }
+
         addModule(mChannelState);
-
-        mDecodeEventModel = new DecodeEventModel();
-        addDecodeEventListener(mDecodeEventModel);
+        addModule(mDecodeEventHistory);
+        addModule(mMessageHistory);
     }
 
-    public DecodeEventModel getDecodeEventModel()
+    /**
+     * Event bus used for inter-module communication.
+     * @return event bus
+     */
+    public EventBus getEventBus()
     {
-        return mDecodeEventModel;
+        return mEventBus;
     }
 
-    public ChannelState getChannelState()
+    /**
+     * Channel state
+     */
+    public AbstractChannelState getChannelState()
     {
         return mChannelState;
     }
 
-    public MessageActivityModel getMessageActivityModel()
+    /**
+     * Decode event history module.
+     */
+    public DecodeEventHistory getDecodeEventHistory()
     {
-        return mMessageActivityModel;
+        return mDecodeEventHistory;
     }
 
-    public void setMessageActivityModel(MessageActivityModel model)
+    /**
+     * Message history module
+     */
+    public MessageHistory getMessageHistory()
     {
-        mMessageActivityModel = model;
+        return mMessageHistory;
+    }
 
-        addMessageListener(mMessageActivityModel);
+    /**
+     * Process a channel configuration change notification.
+     *
+     * Note: this will normally occur when a standard channel is converted to a traffic channel.
+     * @param notification of the change
+     */
+    public void channelConfigurationChanged(ChannelConfigurationChangeNotification notification)
+    {
+        getEventBus().post(notification);
+    }
+
+    /**
+     * Removes any module that is an instance of a TrafficChannelManager
+     */
+    public void removeTrafficChannelManager()
+    {
+        Iterator<Module> it = mModules.iterator();
+
+        while(it.hasNext())
+        {
+            if(it.next() instanceof TrafficChannelManager)
+            {
+                it.remove();
+            }
+        }
     }
 
     public void dispose()
     {
         stop();
 
-        for(Module module : mModules)
+        List<Module> modules = new ArrayList<>(mModules);
+
+        for(Module module : modules)
         {
+            removeModule(module);
             module.dispose();
         }
 
         mModules.clear();
 
-        mAudioPacketBroadcaster.dispose();
+        mAudioSegmentBroadcaster.dispose();
         mDecodeEventBroadcaster.dispose();
         mChannelEventBroadcaster.dispose();
         mBasebandComplexBufferBroadcaster.dispose();
         mDemodulatedBitstreamBufferBroadcaster.dispose();
         mMessageBroadcaster.dispose();
-        mSquelchStateBroadcaster.dispose();
+        mSquelchStateEventBroadcaster.dispose();
     }
 
     /**
@@ -184,11 +242,11 @@ public class ProcessingChain implements Listener<ChannelEvent>
     }
 
     /**
-     * Indicates if this chain currently has a valid sample source.
+     * Indicates if this chain's source is the same as the source argument
      */
-    public boolean hasSource()
+    public boolean hasSource(Source source)
     {
-        return mSource != null;
+        return mSource != null && mSource.equals(source);
     }
 
     /**
@@ -267,7 +325,7 @@ public class ProcessingChain implements Listener<ChannelEvent>
     public void addModule(Module module)
     {
         mModules.add(module);
-
+        module.setInterModuleEventBus(getEventBus());
         registerListeners(module);
         registerProviders(module);
     }
@@ -280,7 +338,7 @@ public class ProcessingChain implements Listener<ChannelEvent>
     {
         unregisterListeners(module);
         unregisterProviders(module);
-
+        module.setInterModuleEventBus(null);
         mModules.remove(module);
     }
 
@@ -295,9 +353,9 @@ public class ProcessingChain implements Listener<ChannelEvent>
             mIdentifierUpdateNotificationBroadcaster.addListener(((IdentifierUpdateListener)module).getIdentifierUpdateListener());
         }
 
-        if(module instanceof IAudioPacketListener)
+        if(module instanceof IAudioSegmentListener)
         {
-            mAudioPacketBroadcaster.addListener(((IAudioPacketListener)module).getAudioPacketListener());
+            mAudioSegmentBroadcaster.addListener(((IAudioSegmentListener)module).getAudioSegmentListener());
         }
 
         if(module instanceof IDecodeEventListener)
@@ -352,7 +410,7 @@ public class ProcessingChain implements Listener<ChannelEvent>
 
         if(module instanceof ISquelchStateListener)
         {
-            mSquelchStateBroadcaster.addListener(((ISquelchStateListener)module).getSquelchStateListener());
+            mSquelchStateEventBroadcaster.addListener(((ISquelchStateListener)module).getSquelchStateListener());
         }
     }
 
@@ -367,9 +425,9 @@ public class ProcessingChain implements Listener<ChannelEvent>
             mIdentifierUpdateNotificationBroadcaster.removeListener(((IdentifierUpdateListener)module).getIdentifierUpdateListener());
         }
 
-        if(module instanceof IAudioPacketListener)
+        if(module instanceof IAudioSegmentListener)
         {
-            mAudioPacketBroadcaster.removeListener(((IAudioPacketListener)module).getAudioPacketListener());
+            mAudioSegmentBroadcaster.removeListener(((IAudioSegmentListener)module).getAudioSegmentListener());
         }
 
         if(module instanceof IDecodeEventListener)
@@ -419,7 +477,7 @@ public class ProcessingChain implements Listener<ChannelEvent>
 
         if(module instanceof ISquelchStateListener)
         {
-            mSquelchStateBroadcaster.removeListener(((ISquelchStateListener)module).getSquelchStateListener());
+            mSquelchStateEventBroadcaster.removeListener(((ISquelchStateListener)module).getSquelchStateListener());
         }
     }
 
@@ -434,9 +492,9 @@ public class ProcessingChain implements Listener<ChannelEvent>
             ((IdentifierUpdateProvider)module).setIdentifierUpdateListener(mIdentifierUpdateNotificationBroadcaster);
         }
 
-        if(module instanceof IAudioPacketProvider)
+        if(module instanceof IAudioSegmentProvider)
         {
-            ((IAudioPacketProvider)module).setAudioPacketListener(mAudioPacketBroadcaster);
+            ((IAudioSegmentProvider)module).setAudioSegmentListener(mAudioSegmentBroadcaster);
         }
 
         if(module instanceof IDecodeEventProvider)
@@ -486,7 +544,7 @@ public class ProcessingChain implements Listener<ChannelEvent>
 
         if(module instanceof ISquelchStateProvider)
         {
-            ((ISquelchStateProvider)module).setSquelchStateListener(mSquelchStateBroadcaster);
+            ((ISquelchStateProvider)module).setSquelchStateListener(mSquelchStateEventBroadcaster);
         }
     }
 
@@ -501,9 +559,9 @@ public class ProcessingChain implements Listener<ChannelEvent>
             ((IdentifierUpdateProvider)module).removeIdentifierUpdateListener();
         }
 
-        if(module instanceof IAudioPacketProvider)
+        if(module instanceof IAudioSegmentProvider)
         {
-            ((IAudioPacketProvider)module).setAudioPacketListener(null);
+            ((IAudioSegmentProvider)module).setAudioSegmentListener(null);
         }
 
         if(module instanceof IReusableByteBufferProvider)
@@ -691,6 +749,14 @@ public class ProcessingChain implements Listener<ChannelEvent>
             {
                 recordingModules.add(module);
             }
+            else if(module instanceof MBECallSequenceRecorder)
+            {
+                recordingModules.add(module);
+            }
+            else if(module instanceof BinaryRecorder)
+            {
+                recordingModules.add(module);
+            }
         }
 
         for(Module recordingModule : recordingModules)
@@ -702,14 +768,14 @@ public class ProcessingChain implements Listener<ChannelEvent>
     /**
      * Adds the listener to receive audio packets from all modules.
      */
-    public void addAudioPacketListener(Listener<ReusableAudioPacket> listener)
+    public void addAudioSegmentListener(Listener<AudioSegment> listener)
     {
-        mAudioPacketBroadcaster.addListener(listener);
+        mAudioSegmentBroadcaster.addListener(listener);
     }
 
-    public void removeAudioPacketListener(Listener<ReusableAudioPacket> listener)
+    public void removeAudioSegmentListener(Listener<AudioSegment> listener)
     {
-        mAudioPacketBroadcaster.removeListener(listener);
+        mAudioSegmentBroadcaster.removeListener(listener);
     }
 
     /**
@@ -757,30 +823,11 @@ public class ProcessingChain implements Listener<ChannelEvent>
     }
 
     /**
-     * Adds the listener to receive decoded messages from all decoders.
+     * Adds a listener to receive source events from this processing chain
      */
-    public void addMessageListener(Listener<IMessage> listener)
+    public void addSourceEventListener(Listener<SourceEvent> listener)
     {
-        mMessageBroadcaster.addListener(listener);
-    }
-
-    /**
-     * Adds the list of listeners to receive decoded messages from all decoders.
-     */
-    public void addMessageListeners(List<Listener<IMessage>> listeners)
-    {
-        for(Listener<IMessage> listener : listeners)
-        {
-            mMessageBroadcaster.addListener(listener);
-        }
-    }
-
-    /**
-     * Removes the listener from receiving decoded messages from all decoders.
-     */
-    public void removeMessageListener(Listener<IMessage> listener)
-    {
-        mMessageBroadcaster.removeListener(listener);
+        mSourceEventBroadcaster.addListener(listener);
     }
 
     /**
@@ -806,14 +853,14 @@ public class ProcessingChain implements Listener<ChannelEvent>
     /**
      * Adds the listener to receive call events from all modules.
      */
-    public void addSquelchStateListener(Listener<SquelchState> listener)
+    public void addSquelchStateListener(Listener<SquelchStateEvent> listener)
     {
-        mSquelchStateBroadcaster.addListener(listener);
+        mSquelchStateEventBroadcaster.addListener(listener);
     }
 
-    public void removeSquelchStateListener(Listener<SquelchState> listener)
+    public void removeSquelchStateListener(Listener<SquelchStateEvent> listener)
     {
-        mSquelchStateBroadcaster.removeListener(listener);
+        mSquelchStateEventBroadcaster.removeListener(listener);
     }
 
     /**

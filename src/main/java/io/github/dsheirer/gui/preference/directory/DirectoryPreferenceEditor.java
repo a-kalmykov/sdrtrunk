@@ -68,6 +68,11 @@ public class DirectoryPreferenceEditor extends HBox
     private Button mResetEventLogsButton;
     private Label mEventLogsPathLabel;
 
+    private Label mJmbeLabel;
+    private Button mChangeJmbeButton;
+    private Button mResetJmbeButton;
+    private Label mJmbePathLabel;
+
     private Label mPlaylistLabel;
     private Button mChangePlaylistButton;
     private Button mResetPlaylistButton;
@@ -93,10 +98,15 @@ public class DirectoryPreferenceEditor extends HBox
         mDirectoryPreference = userPreferences.getDirectoryPreference();
 
         //Register to receive directory preference update notifications so we can update the path labels
-        MyEventBus.getEventBus().register(this);
+        MyEventBus.getGlobalEventBus().register(this);
 
         HBox.setHgrow(getEditorPane(), Priority.ALWAYS);
         getChildren().add(getEditorPane());
+    }
+
+    public void dispose()
+    {
+        MyEventBus.getGlobalEventBus().unregister(this);
     }
 
     private GridPane getEditorPane()
@@ -155,6 +165,19 @@ public class DirectoryPreferenceEditor extends HBox
 
             GridPane.setMargin(getResetEventLogsButton(), new Insets(2, 0, 2, 0));
             mEditorPane.add(getResetEventLogsButton(), 3, row++);
+
+
+            GridPane.setMargin(getJmbeLabel(), new Insets(0, 10, 0, 0));
+            mEditorPane.add(getJmbeLabel(), 0, row);
+
+            GridPane.setMargin(getJmbePathLabel(), new Insets(0, 10, 0, 0));
+            mEditorPane.add(getJmbePathLabel(), 1, row);
+
+            GridPane.setMargin(getChangeJmbeButton(), new Insets(2, 10, 2, 0));
+            mEditorPane.add(getChangeJmbeButton(), 2, row);
+
+            GridPane.setMargin(getResetJmbeButton(), new Insets(2, 0, 2, 0));
+            mEditorPane.add(getResetJmbeButton(), 3, row++);
 
 
             GridPane.setMargin(getPlaylistLabel(), new Insets(0, 10, 0, 0));
@@ -405,6 +428,71 @@ public class DirectoryPreferenceEditor extends HBox
         }
 
         return mEventLogsPathLabel;
+    }
+
+    private Label getJmbeLabel()
+    {
+        if(mJmbeLabel == null)
+        {
+            mJmbeLabel = new Label("JMBE Libraries");
+        }
+
+        return mJmbeLabel;
+    }
+
+    private Button getChangeJmbeButton()
+    {
+        if(mChangeJmbeButton == null)
+        {
+            mChangeJmbeButton = new Button("Change...");
+            mChangeJmbeButton.setOnAction(new EventHandler<ActionEvent>()
+            {
+                @Override
+                public void handle(ActionEvent event)
+                {
+                    DirectoryChooser directoryChooser = new DirectoryChooser();
+                    directoryChooser.setTitle("Select JMBE Folder");
+                    directoryChooser.setInitialDirectory(mDirectoryPreference.getDirectoryJmbe().toFile());
+                    Stage stage = (Stage)getChangeJmbeButton().getScene().getWindow();
+                    File selected = directoryChooser.showDialog(stage);
+
+                    if(selected != null)
+                    {
+                        mDirectoryPreference.setDirectoryJmbe(selected.toPath());
+                    }
+                }
+            });
+        }
+
+        return mChangeJmbeButton;
+    }
+
+    private Button getResetJmbeButton()
+    {
+        if(mResetJmbeButton == null)
+        {
+            mResetJmbeButton = new Button("Reset");
+            mResetJmbeButton.setOnAction(new EventHandler<ActionEvent>()
+            {
+                @Override
+                public void handle(ActionEvent event)
+                {
+                    mDirectoryPreference.resetDirectoryJmbe();
+                }
+            });
+        }
+
+        return mResetJmbeButton;
+    }
+
+    private Label getJmbePathLabel()
+    {
+        if(mJmbePathLabel == null)
+        {
+            mJmbePathLabel = new Label(mDirectoryPreference.getDirectoryJmbe().toString());
+        }
+
+        return mJmbePathLabel;
     }
 
     private Label getPlaylistLabel()

@@ -1,21 +1,23 @@
 /*
- * ******************************************************************************
- * sdrtrunk
- * Copyright (C) 2014-2019 Dennis Sheirer
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2019 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>
- * *****************************************************************************
  */
 package io.github.dsheirer.gui.instrument;
 
@@ -37,7 +39,6 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
 import jiconfont.icons.font_awesome.FontAwesome;
-import jiconfont.javafx.IconFontFX;
 import jiconfont.javafx.IconNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,7 +70,6 @@ public class PlaybackController extends HBox implements IFrameLocationListener
     public PlaybackController()
     {
         super(10);
-        IconFontFX.register(jiconfont.icons.font_awesome.FontAwesome.getIconFont());
 
         getChildren().addAll(getControlsBox(), getFileLabel());
 
@@ -205,8 +205,10 @@ public class PlaybackController extends HBox implements IFrameLocationListener
         getPlaybackPositionText().setDisable(true);
         getPlay1Button().setDisable(true);
         getPlay10Button().setDisable(true);
+        getPlay30Button().setDisable(true);
         getPlay100Button().setDisable(true);
         getPlay1000Button().setDisable(true);
+        getPlay2000Button().setDisable(true);
     }
 
     /**
@@ -218,8 +220,10 @@ public class PlaybackController extends HBox implements IFrameLocationListener
         getPlaybackPositionText().setDisable(false);
         getPlay1Button().setDisable(false);
         getPlay10Button().setDisable(false);
+        getPlay30Button().setDisable(false);
         getPlay100Button().setDisable(false);
         getPlay1000Button().setDisable(false);
+        getPlay2000Button().setDisable(false);
     }
 
     private HBox getControlsBox()

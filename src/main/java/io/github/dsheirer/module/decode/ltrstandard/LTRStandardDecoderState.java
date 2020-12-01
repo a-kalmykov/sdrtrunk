@@ -1,21 +1,23 @@
 /*
- * ******************************************************************************
- * sdrtrunk
- * Copyright (C) 2014-2018 Dennis Sheirer
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2019 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>
- * *****************************************************************************
  */
 package io.github.dsheirer.module.decode.ltrstandard;
 
@@ -37,7 +39,7 @@ import io.github.dsheirer.module.decode.ltrstandard.channel.LtrChannel;
 import io.github.dsheirer.module.decode.ltrstandard.message.Call;
 import io.github.dsheirer.module.decode.ltrstandard.message.CallEnd;
 import io.github.dsheirer.module.decode.ltrstandard.message.Idle;
-import io.github.dsheirer.module.decode.ltrstandard.message.LTRStandardMessage;
+import io.github.dsheirer.module.decode.ltrstandard.message.LTRMessage;
 import io.github.dsheirer.protocol.Protocol;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,15 +70,15 @@ public class LTRStandardDecoderState extends DecoderState
     @Override
     public DecoderType getDecoderType()
     {
-        return DecoderType.LTR_STANDARD;
+        return DecoderType.LTR;
     }
 
     @Override
     public void receive(IMessage message)
     {
-        if(message.isValid() && message instanceof LTRStandardMessage)
+        if(message.isValid() && message instanceof LTRMessage)
         {
-            switch(((LTRStandardMessage)message).getMessageType())
+            switch(((LTRMessage)message).getMessageType())
             {
                 case CALL:
                     if(message instanceof Call)
@@ -96,7 +98,7 @@ public class LTRStandardDecoderState extends DecoderState
                                 getIdentifierCollection().remove(IdentifierClass.USER);
                                 getIdentifierCollection().update(start.getTalkgroup());
                                 mCurrentCallEvent = DecodeEvent.builder(start.getTimestamp())
-                                    .protocol(Protocol.LTR_STANDARD)
+                                    .protocol(Protocol.LTR)
                                     .identifiers(getIdentifierCollection().copyOf())
                                     .channel(getCurrentChannel())
                                     .eventDescription("Call")
@@ -147,6 +149,7 @@ public class LTRStandardDecoderState extends DecoderState
      */
     public void reset()
     {
+        super.reset();
         mActiveCalls.clear();
         mTalkgroupsFirstHeard.clear();
         mTalkgroups.clear();
@@ -198,7 +201,7 @@ public class LTRStandardDecoderState extends DecoderState
         if(mLCNTracker.getCurrentChannel() != original)
         {
             getIdentifierCollection().update(DecoderLogicalChannelNameIdentifier
-                .create(String.valueOf(mLCNTracker.getCurrentChannel()), Protocol.LTR_STANDARD));
+                .create(String.valueOf(mLCNTracker.getCurrentChannel()), Protocol.LTR));
 
             LtrChannel ltrChannel = new LtrChannel(mLCNTracker.getCurrentChannel());
 
@@ -219,7 +222,7 @@ public class LTRStandardDecoderState extends DecoderState
     {
         switch(event.getEvent())
         {
-            case RESET:
+            case REQUEST_RESET:
                 resetState();
                 break;
         }

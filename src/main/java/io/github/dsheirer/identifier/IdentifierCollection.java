@@ -1,7 +1,6 @@
 /*
- * ******************************************************************************
- * sdrtrunk
- * Copyright (C) 2014-2019 Dennis Sheirer
+ * *****************************************************************************
+ *  Copyright (C) 2014-2020 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,7 +14,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
- * *****************************************************************************
+ * ****************************************************************************
  */
 
 package io.github.dsheirer.identifier;
@@ -28,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * (Immutable) Collection of identifiers with convenient accessor methods
@@ -37,18 +37,33 @@ import java.util.List;
 public class IdentifierCollection
 {
     private final static Logger mLog = LoggerFactory.getLogger(IdentifierCollection.class);
-    protected List<Identifier> mIdentifiers = new ArrayList<>();
+    protected List<Identifier> mIdentifiers = new CopyOnWriteArrayList<>();
     protected AliasListConfigurationIdentifier mAliasListConfigurationIdentifier;
-    private boolean mUpdated = false;
+    private int mTimeslot = 0;
+
+    /**
+     * Constructs an empty identifier collection for the specified timeslot
+     * @param timeslot
+     */
+    public IdentifierCollection(int timeslot)
+    {
+        mTimeslot = timeslot;
+    }
 
     /**
      * Constructs an empty identifier collection
      */
     public IdentifierCollection()
     {
+        this(0);
     }
 
     public IdentifierCollection(Collection<Identifier> identifiers)
+    {
+        this(identifiers, 0);
+    }
+
+    public IdentifierCollection(Collection<Identifier> identifiers, int timeslot)
     {
         for(Identifier identifier: identifiers)
         {
@@ -66,27 +81,14 @@ public class IdentifierCollection
         }
     }
 
-    public IdentifierCollection(Identifier identifier)
+    public int getTimeslot()
     {
-        if(identifier == null)
-        {
-            throw new IllegalArgumentException("Identifier cannot be null");
-        }
-
-        mIdentifiers.add(identifier);
+        return mTimeslot;
     }
 
-    /**
-     * Indicates if this identifier collection contains an updated list of identifiers.
-     */
-    public boolean isUpdated()
+    public void setTimeslot(int timeslot)
     {
-        return mUpdated;
-    }
-
-    public void setUpdated(boolean updated)
-    {
-        mUpdated = updated;
+        mTimeslot = timeslot;
     }
 
     /**
@@ -197,7 +199,7 @@ public class IdentifierCollection
                         sb.append("Identifier: ").append(i).append(" Class:").append(i.getClass()).append("\n");
                     }
                 }
-                mLog.warn("An identifier in a collection is somehow null ...\n" + sb.toString());
+                mLog.warn("An identifier in a collection is somehow null ...\n" + sb);
             }
         }
 
@@ -301,4 +303,19 @@ public class IdentifierCollection
         return null;
     }
 
+    @Override
+    public String toString()
+    {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Identifier Collection - Timeslot:").append(mTimeslot).append("\n");
+        for(Identifier identifier: getIdentifiers())
+        {
+            sb.append("\t").append(identifier.toString());
+            sb.append("\t{").append(identifier.getIdentifierClass().name()).append("|")
+                .append(identifier.getForm().name()).append("|")
+                .append(identifier.getRole().name()).append("}");
+            sb.append("\t").append(identifier.getClass()).append("\n");
+        }
+        return sb.toString();
+    }
 }

@@ -1,31 +1,35 @@
 /*
- * ******************************************************************************
- * sdrtrunk
- * Copyright (C) 2014-2019 Dennis Sheirer
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2019 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>
- * *****************************************************************************
  */
 
 package io.github.dsheirer.preference.identifier;
 
 import io.github.dsheirer.identifier.Identifier;
 import io.github.dsheirer.identifier.patch.PatchGroupIdentifier;
+import io.github.dsheirer.identifier.radio.RadioIdentifier;
 import io.github.dsheirer.identifier.talkgroup.TalkgroupIdentifier;
 import io.github.dsheirer.preference.Preference;
 import io.github.dsheirer.preference.PreferenceType;
 import io.github.dsheirer.preference.identifier.talkgroup.APCO25TalkgroupFormatter;
+import io.github.dsheirer.preference.identifier.talkgroup.DMRTalkgroupFormatter;
 import io.github.dsheirer.preference.identifier.talkgroup.FleetsyncTalkgroupFormatter;
 import io.github.dsheirer.preference.identifier.talkgroup.LTRTalkgroupFormatter;
 import io.github.dsheirer.preference.identifier.talkgroup.MDC1200TalkgroupFormatter;
@@ -36,8 +40,9 @@ import io.github.dsheirer.sample.Listener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.prefs.Preferences;
 
 /**
@@ -51,8 +56,8 @@ public class TalkgroupFormatPreference extends Preference
     public static final String TALKGROUP_FORMAT_PROPERTY = "talkgroup.format.";
     public static final String TALKGROUP_FIXED_WIDTH_PROPERTY = "talkgroup.fixed.width.";
 
-    private Map<Protocol,IntegerFormat> mTalkgroupFormatProtocolMap = new HashMap<>();
-    private Map<Protocol,Boolean> mTalkgroupFixedWidthProtocolMap = new HashMap<>();
+    private Map<Protocol,IntegerFormat> mTalkgroupFormatProtocolMap = new EnumMap<>(Protocol.class);
+    private Map<Protocol,Boolean> mTalkgroupFixedWidthProtocolMap = new EnumMap<>(Protocol.class);
 
     /**
      * Constructs an instance of identifier formatting preference.
@@ -92,6 +97,12 @@ public class TalkgroupFormatPreference extends Preference
                     return formatPatchGroupIdentifier((PatchGroupIdentifier)identifier);
                 }
                 break;
+            case RADIO:
+                if(identifier instanceof RadioIdentifier)
+                {
+                    return formatRadioIdentifier((RadioIdentifier)identifier);
+                }
+                break;
         }
 
         return identifier.toString();
@@ -100,7 +111,7 @@ public class TalkgroupFormatPreference extends Preference
     @Override
     public PreferenceType getPreferenceType()
     {
-        return PreferenceType.IDENTIFIER;
+        return PreferenceType.TALKGROUP_FORMAT;
     }
 
     /**
@@ -129,29 +140,41 @@ public class TalkgroupFormatPreference extends Preference
     /**
      * Default format for each protocol
      */
-    private IntegerFormat getDefaultFormat(Protocol protocol)
+    public static IntegerFormat getDefaultFormat(Protocol protocol)
     {
         switch(protocol)
         {
-            case APCO25:
-                return IntegerFormat.DECIMAL;
             case FLEETSYNC:
-                return IntegerFormat.FORMATTED;
             case LTR:
-                return IntegerFormat.FORMATTED;
             case LTR_NET:
-                return IntegerFormat.FORMATTED;
-            case LTR_STANDARD:
-                return IntegerFormat.FORMATTED;
-            case MDC1200:
-                return IntegerFormat.DECIMAL;
             case MPT1327:
                 return IntegerFormat.FORMATTED;
+            case APCO25:
+            case DMR:
+            case MDC1200:
             case PASSPORT:
-                return IntegerFormat.DECIMAL;
             case UNKNOWN:
             default:
                 return IntegerFormat.DECIMAL;
+        }
+    }
+
+    public static Set<IntegerFormat> getFormats(Protocol protocol)
+    {
+        switch(protocol)
+        {
+            case FLEETSYNC:
+            case LTR:
+            case LTR_NET:
+            case MPT1327:
+                return IntegerFormat.DECIMAL_FORMATTED;
+            case APCO25:
+            case DMR:
+            case MDC1200:
+            case PASSPORT:
+            case UNKNOWN:
+            default:
+                return IntegerFormat.DECIMAL_HEXADECIMAL;
         }
     }
 
@@ -159,22 +182,15 @@ public class TalkgroupFormatPreference extends Preference
     {
         switch(protocol)
         {
-            case APCO25:
-                return true;
-            case FLEETSYNC:
-                return true;
-            case LTR:
-                return true;
-            case LTR_NET:
-                return true;
-            case LTR_STANDARD:
-                return true;
             case MDC1200:
-                return false;
-            case MPT1327:
-                return true;
             case PASSPORT:
                 return false;
+            case APCO25:
+            case DMR:
+            case FLEETSYNC:
+            case LTR:
+            case LTR_NET:
+            case MPT1327:
             case UNKNOWN:
             default:
                 return true;
@@ -205,12 +221,19 @@ public class TalkgroupFormatPreference extends Preference
      */
     public IntegerFormat getTalkgroupFormat(Protocol protocol)
     {
+        IntegerFormat format = null;
+
         if(mTalkgroupFormatProtocolMap.containsKey(protocol))
         {
-            return mTalkgroupFormatProtocolMap.get(protocol);
+            format = mTalkgroupFormatProtocolMap.get(protocol);
         }
 
-        return IntegerFormat.DECIMAL;
+        if(format == null || !getFormats(protocol).contains(format))
+        {
+            format = getDefaultFormat(protocol);
+        }
+
+        return format;
     }
 
     /**
@@ -291,15 +314,15 @@ public class TalkgroupFormatPreference extends Preference
             case APCO25:
                 return APCO25TalkgroupFormatter.format(talkgroupIdentifier, getTalkgroupFormat(Protocol.APCO25),
                     isTalkgroupFixedWidth(Protocol.APCO25));
+            case DMR:
+                return DMRTalkgroupFormatter.format(talkgroupIdentifier, getTalkgroupFormat(Protocol.DMR),
+                    isTalkgroupFixedWidth(Protocol.DMR));
             case FLEETSYNC:
                 return FleetsyncTalkgroupFormatter.format(talkgroupIdentifier, getTalkgroupFormat(Protocol.FLEETSYNC),
                     isTalkgroupFixedWidth(Protocol.FLEETSYNC));
-            case LTR_STANDARD:
-                return LTRTalkgroupFormatter.format(talkgroupIdentifier, getTalkgroupFormat(Protocol.LTR_STANDARD),
-                    isTalkgroupFixedWidth(Protocol.LTR_STANDARD));
-            case LTR_NET:
-                return LTRTalkgroupFormatter.format(talkgroupIdentifier, getTalkgroupFormat(Protocol.LTR_NET),
-                    isTalkgroupFixedWidth(Protocol.LTR_NET));
+            case LTR:
+                return LTRTalkgroupFormatter.format(talkgroupIdentifier, getTalkgroupFormat(Protocol.LTR),
+                    isTalkgroupFixedWidth(Protocol.LTR));
             case MDC1200:
                 return MDC1200TalkgroupFormatter.format(talkgroupIdentifier, getTalkgroupFormat(Protocol.MDC1200),
                     isTalkgroupFixedWidth(Protocol.MDC1200));
@@ -329,6 +352,30 @@ public class TalkgroupFormatPreference extends Preference
                     isTalkgroupFixedWidth(Protocol.APCO25));
             default:
                 return patchGroupIdentifier.toString();
+        }
+    }
+
+    /**
+     * Formats the identifier according to user specified preferences for number format and length.
+     *
+     * @param radioIdentifier to format
+     * @return formatted radio ID
+     */
+    private String formatRadioIdentifier(RadioIdentifier radioIdentifier)
+    {
+        switch(radioIdentifier.getProtocol())
+        {
+            case APCO25:
+                return APCO25TalkgroupFormatter.format(radioIdentifier, getTalkgroupFormat(Protocol.APCO25),
+                    isTalkgroupFixedWidth(Protocol.APCO25));
+            case DMR:
+                return DMRTalkgroupFormatter.format(radioIdentifier, getTalkgroupFormat(Protocol.DMR),
+                    isTalkgroupFixedWidth(Protocol.DMR));
+            case PASSPORT:
+                return PassportTalkgroupFormatter.format(radioIdentifier, getTalkgroupFormat(Protocol.PASSPORT),
+                    isTalkgroupFixedWidth(Protocol.PASSPORT));
+            default:
+                return radioIdentifier.toString();
         }
     }
 }

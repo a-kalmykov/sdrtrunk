@@ -1,7 +1,6 @@
 /*
- * ******************************************************************************
- * sdrtrunk
- * Copyright (C) 2014-2019 Dennis Sheirer
+ * *****************************************************************************
+ *  Copyright (C) 2014-2020 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,7 +14,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
- * *****************************************************************************
+ * ****************************************************************************
  */
 
 package io.github.dsheirer.gui.preference;
@@ -26,11 +25,14 @@ package io.github.dsheirer.gui.preference;
 public enum PreferenceEditorType
 {
     CHANNEL_EVENT("Channel Events"),
-    JMBE_LIBRARY("JMBE Audio Library"),
     DIRECTORY("Directories"),
-    SOURCE_CHANNEL_MULTIPLE_FREQUENCY("Channel - Multiple Frequency"),
+    JMBE_LIBRARY("JMBE Audio Library"),
+    AUDIO_RECORD("Record"),
+    AUDIO_OUTPUT("Output/Tones"),
+    AUDIO_DUPLICATE_CALL_DETECTION("Duplicate Calls"),
     SOURCE_TUNER_CHANNELIZER("Tuner Channelizer"),
-    TALKGROUP_FORMAT("Talkgroups");
+    TALKGROUP_FORMAT("Talkgroup & Radio ID"),
+    DEFAULT("Default");
 
     private String mLabel;
 

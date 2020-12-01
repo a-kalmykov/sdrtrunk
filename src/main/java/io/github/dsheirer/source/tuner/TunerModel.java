@@ -1,21 +1,23 @@
 /*
- * ******************************************************************************
- * sdrtrunk
- * Copyright (C) 2014-2019 Dennis Sheirer
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2020 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>
- * *****************************************************************************
  */
 package io.github.dsheirer.source.tuner;
 
@@ -29,6 +31,7 @@ import io.github.dsheirer.source.tuner.channel.TunerChannel;
 import io.github.dsheirer.source.tuner.channel.TunerChannelSource;
 import io.github.dsheirer.source.tuner.configuration.TunerConfiguration;
 import io.github.dsheirer.source.tuner.configuration.TunerConfigurationModel;
+import io.github.dsheirer.source.tuner.recording.RecordingTuner;
 import io.github.dsheirer.spectrum.SpectralDisplayPanel;
 import io.github.dsheirer.util.ThreadPool;
 import org.slf4j.Logger;
@@ -37,6 +40,7 @@ import org.slf4j.LoggerFactory;
 import javax.swing.table.AbstractTableModel;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -55,7 +59,7 @@ public class TunerModel extends AbstractTableModel implements Listener<TunerEven
     public static final int FREQUENCY_ERROR = 5;
     public static final int MEASURED_FREQUENCY_ERROR = 6;
     public static final int SPECTRAL_DISPLAY_NEW = 7;
-
+    private static final int MAXIMUM_RECORDING_TUNERS_ALLOWED = 1;
     private static final String MHZ = " MHz";
     private static final String[] COLUMNS = {"Tuner", "ID", "Sample Rate", "Frequency", "Channels", "Current PPM",
         "Measured Error", "Display"};
@@ -86,6 +90,23 @@ public class TunerModel extends AbstractTableModel implements Listener<TunerEven
         return mTuners;
     }
 
+    /**
+     * Sorted list of tuner names
+     */
+    public List<String> getTunerNames()
+    {
+        List<String> names = new ArrayList<>();
+
+        for(Tuner tuner: mTuners)
+        {
+            names.add(tuner.getName());
+        }
+
+        Collections.sort(names);
+
+        return names;
+    }
+
     public Tuner getTuner(int index)
     {
         if(index < mTuners.size())
@@ -108,7 +129,7 @@ public class TunerModel extends AbstractTableModel implements Listener<TunerEven
         {
             for(Tuner tuner : mTuners)
             {
-                if(tuner.getName().equalsIgnoreCase(name))
+                if(!tuner.hasError() && tuner.getName().equalsIgnoreCase(name))
                 {
                     return tuner;
                 }
@@ -175,6 +196,26 @@ public class TunerModel extends AbstractTableModel implements Listener<TunerEven
 
             fireTableRowsDeleted(index, index);
         }
+    }
+
+    /**
+     * Indicates if a recording tuner can be added to the set of tuners.  This is constrained by the maximum
+     * allowed limit.
+     * @return true if a recording tuner can be added.
+     */
+    public boolean canAddRecordingTuner()
+    {
+        int count = 0;
+
+        for(Tuner tuner: mTuners)
+        {
+            if(tuner instanceof RecordingTuner)
+            {
+                count++;
+            }
+        }
+
+        return count < MAXIMUM_RECORDING_TUNERS_ALLOWED;
     }
 
     public void addListener(Listener<TunerEvent> listener)
@@ -254,6 +295,14 @@ public class TunerModel extends AbstractTableModel implements Listener<TunerEven
                         break;
                     case REQUEST_MAIN_SPECTRAL_DISPLAY:
                         fireTableCellUpdated(index, MEASURED_FREQUENCY_ERROR);
+                        break;
+                    case ERROR_STATE:
+                        fireTableCellUpdated(index, CHANNEL_COUNT);
+                        fireTableCellUpdated(index, FREQUENCY);
+                        fireTableCellUpdated(index, FREQUENCY_ERROR);
+                        fireTableCellUpdated(index, MEASURED_FREQUENCY_ERROR);
+                        fireTableCellUpdated(index, SAMPLE_RATE);
+                        break;
                     default:
                         break;
                 }
@@ -289,10 +338,17 @@ public class TunerModel extends AbstractTableModel implements Listener<TunerEven
                 case TUNER_ID:
                     return tuner.getUniqueID();
                 case SAMPLE_RATE:
+                    if(tuner.hasError())
+                    {
+                        return tuner.getErrorMessage();
+                    }
                     double sampleRate = tuner.getTunerController().getSampleRate();
-
                     return mSampleRateFormat.format(sampleRate / 1E6D) + MHZ;
                 case FREQUENCY:
+                    if(tuner.hasError())
+                    {
+                        return tuner.getErrorMessage();
+                    }
                     try
                     {
                         long frequency = tuner.getTunerController().getFrequency();
@@ -304,12 +360,24 @@ public class TunerModel extends AbstractTableModel implements Listener<TunerEven
                         return 0;
                     }
                 case CHANNEL_COUNT:
+                    if(tuner.hasError())
+                    {
+                        return tuner.getErrorMessage();
+                    }
                     int channelCount = tuner.getChannelSourceManager().getTunerChannelCount();
                     return channelCount + " (" + (tuner.getTunerController().isLocked() ? "LOCKED)" : "UNLOCKED)");
                 case FREQUENCY_ERROR:
+                    if(tuner.hasError())
+                    {
+                        return tuner.getErrorMessage();
+                    }
                     double ppm = tuner.getTunerController().getFrequencyCorrection();
                     return mFrequencyErrorPPMFormat.format(ppm);
                 case MEASURED_FREQUENCY_ERROR:
+                    if(tuner.hasError())
+                    {
+                        return tuner.getErrorMessage();
+                    }
                     if(tuner.getTunerController().hasMeasuredFrequencyError())
                     {
                         StringBuilder sb = new StringBuilder();
@@ -322,7 +390,14 @@ public class TunerModel extends AbstractTableModel implements Listener<TunerEven
 
                     return "";
                 case SPECTRAL_DISPLAY_NEW:
-                    return "New";
+                    if(tuner.hasError())
+                    {
+                        return null;
+                    }
+                    else
+                    {
+                        return "New";
+                    }
                 default:
                     break;
             }
@@ -348,8 +423,6 @@ public class TunerModel extends AbstractTableModel implements Listener<TunerEven
 
         if(tunerChannel != null && channelSpecification != null)
         {
-            Iterator<Tuner> it = mTuners.iterator();
-
             Tuner tuner;
 
             if(preferredTuner != null)
@@ -377,17 +450,22 @@ public class TunerModel extends AbstractTableModel implements Listener<TunerEven
                     preferredTuner + "] - searching for another tuner");
             }
 
+            Iterator<Tuner> it = mTuners.iterator();
+
             while(it.hasNext() && source == null)
             {
                 tuner = it.next();
 
-                try
+                if(!tuner.hasError())
                 {
-                    source = tuner.getChannelSourceManager().getSource(tunerChannel, channelSpecification);
-                }
-                catch(Exception e)
-                {
-                    mLog.error("Error obtaining channel from tuner [" + tuner.getName() + "]", e);
+                    try
+                    {
+                        source = tuner.getChannelSourceManager().getSource(tunerChannel, channelSpecification);
+                    }
+                    catch(Exception e)
+                    {
+                        mLog.error("Error obtaining channel from tuner [" + tuner.getName() + "]", e);
+                    }
                 }
             }
         }

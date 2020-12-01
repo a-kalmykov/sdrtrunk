@@ -20,10 +20,10 @@ package io.github.dsheirer.audio.convert;
 
 import io.github.dsheirer.audio.AudioFormats;
 import io.github.dsheirer.audio.AudioUtils;
-import io.github.dsheirer.sample.buffer.ReusableAudioPacket;
 import net.sourceforge.lame.lowlevel.LameEncoder;
 import net.sourceforge.lame.mp3.Lame;
 import net.sourceforge.lame.mp3.MPEGMode;
+import org.apache.commons.math3.util.FastMath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,13 +54,13 @@ public class MP3AudioConverter implements IAudioConverter
     }
 
     @Override
-    public byte[] convert(List<ReusableAudioPacket> audioPackets)
+    public byte[] convert(List<float[]> audioPackets)
     {
         mMP3Stream.reset();
 
         byte[] pcmBytes = AudioUtils.convertTo16BitSamples(audioPackets);
 
-        int pcmBufferSize = Math.min(mMP3Buffer.length, pcmBytes.length);
+        int pcmBufferSize = FastMath.min(mMP3Buffer.length, pcmBytes.length);
 
         int mp3BufferSize = 0;
 
@@ -71,7 +71,37 @@ public class MP3AudioConverter implements IAudioConverter
             while (0 < (mp3BufferSize = mEncoder.encodeBuffer(pcmBytes, pcmBytesPosition, pcmBufferSize, mMP3Buffer)))
             {
                 pcmBytesPosition += pcmBufferSize;
-                pcmBufferSize = Math.min(mMP3Buffer.length, pcmBytes.length - pcmBytesPosition);
+                pcmBufferSize = FastMath.min(mMP3Buffer.length, pcmBytes.length - pcmBytesPosition);
+                mMP3Stream.write(mMP3Buffer, 0, mp3BufferSize);
+            }
+
+            return mMP3Stream.toByteArray();
+        }
+        catch(Exception e)
+        {
+            mLog.error("There was an error converting audio to MP3: " + e.getMessage());
+            return new byte[0];
+        }
+    }
+
+    public byte[] convertAudio(List<float[]> audioBuffers)
+    {
+        mMP3Stream.reset();
+
+        byte[] pcmBytes = AudioUtils.convert(audioBuffers);
+
+        int pcmBufferSize = FastMath.min(mMP3Buffer.length, pcmBytes.length);
+
+        int mp3BufferSize = 0;
+
+        int pcmBytesPosition = 0;
+
+        try
+        {
+            while (0 < (mp3BufferSize = mEncoder.encodeBuffer(pcmBytes, pcmBytesPosition, pcmBufferSize, mMP3Buffer)))
+            {
+                pcmBytesPosition += pcmBufferSize;
+                pcmBufferSize = FastMath.min(mMP3Buffer.length, pcmBytes.length - pcmBytesPosition);
                 mMP3Stream.write(mMP3Buffer, 0, mp3BufferSize);
             }
 

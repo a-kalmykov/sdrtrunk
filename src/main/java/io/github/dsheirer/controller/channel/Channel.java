@@ -1,21 +1,23 @@
 /*
- * ******************************************************************************
- * sdrtrunk
- * Copyright (C) 2014-2018 Dennis Sheirer
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2020 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>
- * *****************************************************************************
  */
 package io.github.dsheirer.controller.channel;
 
@@ -37,11 +39,23 @@ import io.github.dsheirer.source.SourceType;
 import io.github.dsheirer.source.config.SourceConfigFactory;
 import io.github.dsheirer.source.config.SourceConfigRecording;
 import io.github.dsheirer.source.config.SourceConfigTuner;
+import io.github.dsheirer.source.config.SourceConfigTunerMultipleFrequency;
 import io.github.dsheirer.source.config.SourceConfiguration;
 import io.github.dsheirer.source.tuner.channel.TunerChannel;
+import javafx.beans.Observable;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.IntegerProperty;
+import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.SimpleIntegerProperty;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.property.StringProperty;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import javafx.util.Callback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.beans.Transient;
 import java.util.Objects;
 
 @JacksonXmlRootElement(localName = "channel")
@@ -64,14 +78,15 @@ public class Channel extends Configuration implements Listener<SourceEvent>
     private EventLogConfiguration mEventLogConfiguration = new EventLogConfiguration();
     private RecordConfiguration mRecordConfiguration = new RecordConfiguration();
 
-    private String mAliasListName;
-    private String mSystem = "System";
-    private String mSite = "Site";
-    private String mName = "Channel";
+    private StringProperty mAliasListName = new SimpleStringProperty();
+    private StringProperty mSystem = new SimpleStringProperty();
+    private StringProperty mSite = new SimpleStringProperty();
+    private StringProperty mName = new SimpleStringProperty();
+    private ObservableList<Long> mFrequencyList;
 
-    private boolean mProcessing;
-    private boolean mAutoStart;
-    private Integer mAutoStartOrder;
+    private BooleanProperty mProcessing = new SimpleBooleanProperty();
+    private BooleanProperty mAutoStart = new SimpleBooleanProperty();
+    private IntegerProperty mAutoStartOrder = new SimpleIntegerProperty();
     private boolean mSelected;
     private TunerChannel mTunerChannel = null;
 
@@ -100,7 +115,7 @@ public class Channel extends Configuration implements Listener<SourceEvent>
     public Channel(String channelName)
     {
         this();
-        mName = channelName;
+        mName.set(channelName);
     }
 
     /**
@@ -116,45 +131,191 @@ public class Channel extends Configuration implements Listener<SourceEvent>
      */
     public Channel copyOf()
     {
-        Channel channel = new Channel(mName);
-        channel.setSystem(mSystem);
-        channel.setSite(mSite);
-        channel.setAliasListName(mAliasListName);
-        channel.setAutoStart(mAutoStart);
-        channel.setAutoStartOrder(mAutoStartOrder);
+        Channel channel = new Channel(mName.get());
+        channel.setSystem(mSystem.get());
+        channel.setSite(mSite.get());
+        channel.setAliasListName(mAliasListName.get());
+        channel.setAutoStart(mAutoStart.get());
+        channel.setAutoStartOrder(mAutoStartOrder.get());
 
-        AuxDecodeConfiguration aux = new AuxDecodeConfiguration();
+        AuxDecodeConfiguration auxCopy = new AuxDecodeConfiguration();
 
-        for(DecoderType auxType : aux.getAuxDecoders())
+        if(getAuxDecodeConfiguration() != null)
         {
-            aux.addAuxDecoder(auxType);
+            for(DecoderType auxType : getAuxDecodeConfiguration().getAuxDecoders())
+            {
+                auxCopy.addAuxDecoder(auxType);
+            }
         }
 
-        channel.setAuxDecodeConfiguration(aux);
+        channel.setAuxDecodeConfiguration(auxCopy);
 
         channel.setDecodeConfiguration(DecoderFactory.copy(mDecodeConfiguration));
 
-        EventLogConfiguration log = new EventLogConfiguration();
+        EventLogConfiguration logCopy = new EventLogConfiguration();
 
-        for(EventLogType logType : mEventLogConfiguration.getLoggers())
+        if(mEventLogConfiguration != null)
         {
-            log.addLogger(logType);
+            for(EventLogType logType : mEventLogConfiguration.getLoggers())
+            {
+                logCopy.addLogger(logType);
+            }
         }
 
-        channel.setEventLogConfiguration(log);
+        channel.setEventLogConfiguration(logCopy);
 
-        RecordConfiguration record = new RecordConfiguration();
+        RecordConfiguration recordCopy = new RecordConfiguration();
 
-        for(RecorderType recordType : mRecordConfiguration.getRecorders())
+        if(mRecordConfiguration != null)
         {
-            record.addRecorder(recordType);
+            for(RecorderType recordType : mRecordConfiguration.getRecorders())
+            {
+                recordCopy.addRecorder(recordType);
+            }
         }
 
-        channel.setRecordConfiguration(record);
+        channel.setRecordConfiguration(recordCopy);
 
         channel.setSourceConfiguration(SourceConfigFactory.copy(mSourceConfiguration));
 
         return channel;
+    }
+
+    /**
+     * Creates a short title containing the system, site and channel name where each value is constrained to
+     * ten characters each.
+     * @return short title
+     */
+    @JsonIgnore
+    public String getShortTitle()
+    {
+        StringBuilder sb = new StringBuilder();
+
+        if(getSystem() != null)
+        {
+            if(getSystem().length() > 10)
+            {
+                sb.append(getSystem().substring(0, 10)).append("..");
+            }
+            else
+            {
+                sb.append(getSystem());
+            }
+        }
+        else
+        {
+            sb.append("No System");
+        }
+
+        sb.append("/");
+
+        if(getSite() != null)
+        {
+            if(getSite().length() > 10)
+            {
+                sb.append(getSite().substring(0, 10)).append("..");
+            }
+            else
+            {
+                sb.append(getSite());
+            }
+        }
+        else
+        {
+            sb.append("No Site");
+        }
+        sb.append("/");
+
+        if(getName() != null)
+        {
+            if(getName().length() > 10)
+            {
+                sb.append(getName().substring(0, 10)).append("..");
+            }
+            else
+            {
+                sb.append(getName());
+            }
+        }
+        else
+        {
+            sb.append("No Channel");
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * Updates the frequencies property as the source configuration changes or is initialized.
+     */
+    private void updateFrequencies()
+    {
+        getFrequencyList().clear();
+
+        if(mSourceConfiguration instanceof SourceConfigTuner)
+        {
+            getFrequencyList().add(((SourceConfigTuner)mSourceConfiguration).getFrequency());
+        }
+        else if(mSourceConfiguration instanceof SourceConfigTunerMultipleFrequency)
+        {
+            getFrequencyList().addAll(((SourceConfigTunerMultipleFrequency)mSourceConfiguration).getFrequencies());
+        }
+    }
+
+    /**
+     * Alias list name property
+     */
+    public StringProperty aliasListNameProperty()
+    {
+        return mAliasListName;
+    }
+
+    /**
+     * System property
+     */
+    public StringProperty systemProperty()
+    {
+        return mSystem;
+    }
+
+    /**
+     * Site property
+     */
+    public StringProperty siteProperty()
+    {
+        return mSite;
+    }
+
+    /**
+     * Channel name property
+     */
+    public StringProperty nameProperty()
+    {
+        return mName;
+    }
+
+    /**
+     * Processing property.  Indicates if this channel configuration is currently processing.
+     */
+    public BooleanProperty processingProperty()
+    {
+        return mProcessing;
+    }
+
+    /**
+     * Auto-Start property.  Indicates if this channel is setup for auto-start
+     */
+    public BooleanProperty autoStartProperty()
+    {
+        return mAutoStart;
+    }
+
+    /**
+     * Auto-start order property.  Indicates the order for starting channels that are flagged for auto-start.
+     */
+    public IntegerProperty autoStartOrderProperty()
+    {
+        return mAutoStartOrder;
     }
 
     /**
@@ -164,6 +325,23 @@ public class Channel extends Configuration implements Listener<SourceEvent>
     public int getChannelID()
     {
         return mChannelID;
+    }
+
+    /**
+     * List of frequencies extracted from the source configuration.  This method only exists to support JavaFX
+     * monitoring of frequency list changes.  Use the source configuration to manage frequencies.
+     */
+    @JsonIgnore
+    @Transient
+    public ObservableList<Long> getFrequencyList()
+    {
+        if(mFrequencyList == null)
+        {
+            mFrequencyList = FXCollections.observableArrayList();
+            updateFrequencies();
+        }
+
+        return mFrequencyList;
     }
 
     /**
@@ -214,17 +392,17 @@ public class Channel extends Configuration implements Listener<SourceEvent>
     @JacksonXmlProperty(isAttribute = true, localName = "system")
     public String getSystem()
     {
-        return mSystem;
+        return mSystem.get();
     }
 
     public void setSystem(String system)
     {
-        mSystem = system;
+        mSystem.set(system);
     }
 
     public boolean hasSystem()
     {
-        return mSystem != null;
+        return mSystem != null && mSystem.get() != null;
     }
 
     /**
@@ -233,17 +411,17 @@ public class Channel extends Configuration implements Listener<SourceEvent>
     @JacksonXmlProperty(isAttribute = true, localName = "site")
     public String getSite()
     {
-        return mSite;
+        return mSite.get();
     }
 
     public void setSite(String site)
     {
-        mSite = site;
+        mSite.set(site);
     }
 
     public boolean hasSite()
     {
-        return mSite != null;
+        return mSite != null && mSite.get() != null;
     }
 
     /**
@@ -252,7 +430,7 @@ public class Channel extends Configuration implements Listener<SourceEvent>
     @JacksonXmlProperty(isAttribute = true, localName = "name")
     public String getName()
     {
-        return mName;
+        return mName.get();
     }
 
     /**
@@ -260,7 +438,7 @@ public class Channel extends Configuration implements Listener<SourceEvent>
      */
     public void setName(String name)
     {
-        mName = name;
+        mName.set(name);
     }
 
     /**
@@ -274,6 +452,8 @@ public class Channel extends Configuration implements Listener<SourceEvent>
         sb.append(hasSite() ? getSite() : "SITE");
         sb.append("_");
         sb.append(getName());
+        sb.append("_");
+        sb.append(getChannelID());
 
         return sb.toString();
     }
@@ -284,7 +464,7 @@ public class Channel extends Configuration implements Listener<SourceEvent>
     @JsonIgnore
     public boolean isProcessing()
     {
-        return mProcessing;
+        return mProcessing.get();
     }
 
     /**
@@ -296,7 +476,7 @@ public class Channel extends Configuration implements Listener<SourceEvent>
      */
     void setProcessing(boolean processing)
     {
-        mProcessing = processing;
+        mProcessing.set(processing);
     }
 
     /**
@@ -310,7 +490,7 @@ public class Channel extends Configuration implements Listener<SourceEvent>
     @JacksonXmlProperty(isAttribute = true, localName = "enabled")
     public boolean getAutoStart()
     {
-        return mAutoStart;
+        return mAutoStart.get();
     }
 
     /**
@@ -319,7 +499,7 @@ public class Channel extends Configuration implements Listener<SourceEvent>
     @JsonIgnore
     public boolean isAutoStart()
     {
-        return mAutoStart;
+        return mAutoStart.get();
     }
 
     /**
@@ -329,7 +509,7 @@ public class Channel extends Configuration implements Listener<SourceEvent>
      */
     public void setAutoStart(boolean autoStart)
     {
-        mAutoStart = autoStart;
+        mAutoStart.set(autoStart);
     }
 
     /**
@@ -341,7 +521,7 @@ public class Channel extends Configuration implements Listener<SourceEvent>
     @JacksonXmlProperty(isAttribute = true, localName = "order")
     public Integer getAutoStartOrder()
     {
-        return mAutoStartOrder;
+        return mAutoStartOrder.get();
     }
 
     /**
@@ -351,7 +531,14 @@ public class Channel extends Configuration implements Listener<SourceEvent>
      */
     public void setAutoStartOrder(Integer order)
     {
-        mAutoStartOrder = order;
+        if(order != null)
+        {
+            mAutoStartOrder.set(order);
+        }
+        else
+        {
+            mAutoStartOrder.setValue(null);
+        }
     }
 
     /**
@@ -362,7 +549,7 @@ public class Channel extends Configuration implements Listener<SourceEvent>
     @JsonIgnore
     public boolean hasAutoStartOrder()
     {
-        return mAutoStartOrder != null;
+        return mAutoStartOrder != null && mAutoStartOrder.getValue() != null;
     }
 
     /**
@@ -372,7 +559,7 @@ public class Channel extends Configuration implements Listener<SourceEvent>
     @JacksonXmlProperty(isAttribute = false, localName = "alias_list_name")
     public String getAliasListName()
     {
-        return mAliasListName;
+        return mAliasListName.get();
     }
 
     /**
@@ -381,15 +568,7 @@ public class Channel extends Configuration implements Listener<SourceEvent>
      */
     public void setAliasListName(String name)
     {
-        mAliasListName = name;
-    }
-
-    /**
-     * Indicates if this channel has a non-null, non-empty alias list name specified.
-     */
-    public boolean hasAliasList()
-    {
-        return mAliasListName != null && !mAliasListName.isEmpty();
+        mAliasListName.set(name);
     }
 
     /**
@@ -452,6 +631,8 @@ public class Channel extends Configuration implements Listener<SourceEvent>
         {
             mSourceConfiguration = config;
         }
+
+        updateFrequencies();
 
         //Clear the tune channel object so that it can be recreated if the
         //source configuration changes
@@ -558,8 +739,6 @@ public class Channel extends Configuration implements Listener<SourceEvent>
 
     /**
      * Current channel frequency correction value (when this channel is processing)
-     *
-     * @return
      */
     @JsonIgnore
     public int getChannelFrequencyCorrection()
@@ -594,5 +773,15 @@ public class Channel extends Configuration implements Listener<SourceEvent>
     public int hashCode()
     {
         return Objects.hash(getChannelID());
+    }
+
+    /**
+     * Creates an observable property extractor for use with observable lists to detect changes internal to this object.
+     */
+    public static Callback<Channel,Observable[]> extractor()
+    {
+        return (Channel c) -> new Observable[] {c.processingProperty(), c.nameProperty(), c.aliasListNameProperty(),
+            c.autoStartOrderProperty(), c.autoStartProperty(), c.siteProperty(), c.systemProperty(),
+            c.getFrequencyList()};
     }
 }

@@ -1,21 +1,23 @@
 /*
- * ******************************************************************************
- * sdrtrunk
- * Copyright (C) 2014-2018 Dennis Sheirer
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2019 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>
- * *****************************************************************************
  */
 package io.github.dsheirer.module.decode.mdc1200;
 
@@ -52,6 +54,7 @@ public class MDCDecoderState extends DecoderState
     @Override
     public void reset()
     {
+        super.reset();
         mIdents.clear();
         mEmergencyIdents.clear();
 
@@ -149,11 +152,9 @@ public class MDCDecoderState extends DecoderState
         }
         else
         {
-            Iterator<MDC1200Identifier> it = mIdents.iterator();
 
-            while(it.hasNext())
-            {
-                sb.append("  ").append(it.next()).append("\n");
+            for (MDC1200Identifier mIdent : mIdents) {
+                sb.append("  ").append(mIdent).append("\n");
             }
         }
 
@@ -169,11 +170,9 @@ public class MDCDecoderState extends DecoderState
 
             while(it.hasNext())
             {
-                Iterator<MDC1200Identifier> it2 = mIdents.iterator();
 
-                while(it2.hasNext())
-                {
-                    sb.append("  ").append(it2.next()).append("\n");
+                for (MDC1200Identifier mIdent : mIdents) {
+                    sb.append("  ").append(mIdent).append("\n");
                 }
             }
         }
@@ -189,7 +188,7 @@ public class MDCDecoderState extends DecoderState
     {
         switch(event.getEvent())
         {
-            case RESET:
+            case REQUEST_RESET:
                 resetState();
                 break;
             default:

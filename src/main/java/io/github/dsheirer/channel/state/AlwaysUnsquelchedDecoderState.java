@@ -1,7 +1,6 @@
 /*
- * ******************************************************************************
- * sdrtrunk
- * Copyright (C) 2014-2018 Dennis Sheirer
+ * *****************************************************************************
+ *  Copyright (C) 2014-2020 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,11 +14,16 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
- * *****************************************************************************
+ * ****************************************************************************
  */
 package io.github.dsheirer.channel.state;
 
 import io.github.dsheirer.channel.state.DecoderStateEvent.Event;
+import io.github.dsheirer.identifier.Form;
+import io.github.dsheirer.identifier.Identifier;
+import io.github.dsheirer.identifier.IdentifierClass;
+import io.github.dsheirer.identifier.Role;
+import io.github.dsheirer.identifier.string.SimpleStringIdentifier;
 import io.github.dsheirer.message.IMessage;
 import io.github.dsheirer.module.decode.DecoderType;
 import org.slf4j.Logger;
@@ -33,6 +37,7 @@ public class AlwaysUnsquelchedDecoderState extends DecoderState
 {
     private final static Logger mLog = LoggerFactory.getLogger(AlwaysUnsquelchedDecoderState.class);
     private static final String NO_SQUELCH = "No Squelch";
+    private Identifier mChannelNameIdentifier;
 
     private DecoderType mDecoderType;
     private String mChannelName;
@@ -40,16 +45,12 @@ public class AlwaysUnsquelchedDecoderState extends DecoderState
     public AlwaysUnsquelchedDecoderState(DecoderType decoderType, String channelName)
     {
         mDecoderType = decoderType;
-        mChannelName = channelName;
+        mChannelName = (channelName != null && !channelName.isEmpty()) ? channelName : decoderType.name() + " CHANNEL";
+        mChannelNameIdentifier = new SimpleStringIdentifier(mChannelName, IdentifierClass.USER, Form.CHANNEL_NAME, Role.TO);
     }
 
     @Override
     public void init()
-    {
-    }
-
-    @Override
-    public void reset()
     {
     }
 
@@ -75,11 +76,9 @@ public class AlwaysUnsquelchedDecoderState extends DecoderState
     @Override
     public void receiveDecoderStateEvent(DecoderStateEvent event)
     {
-        if(event.getEvent() == Event.RESET)
+        if(event.getEvent() == Event.REQUEST_RESET)
         {
-            //Each time we're reset, set the PRIMARY TO attribute back to the channel name, otherwise we won't have
-            //a primary ID for any audio produced by this state.
-//            broadcast(new AttributeChangeRequest<String>(Attribute.PRIMARY_ADDRESS_TO, NO_SQUELCH));
+            getIdentifierCollection().update(mChannelNameIdentifier);
         }
     }
 
@@ -92,8 +91,8 @@ public class AlwaysUnsquelchedDecoderState extends DecoderState
     @Override
     public void start()
     {
-//        broadcast(new AttributeChangeRequest<String>(Attribute.PRIMARY_ADDRESS_TO, NO_SQUELCH));
-        broadcast(new DecoderStateEvent(this, Event.ALWAYS_UNSQUELCH, State.IDLE));
+        broadcast(new DecoderStateEvent(this, Event.REQUEST_ALWAYS_UNSQUELCH, State.IDLE));
+        getIdentifierCollection().update(mChannelNameIdentifier);
     }
 
     @Override

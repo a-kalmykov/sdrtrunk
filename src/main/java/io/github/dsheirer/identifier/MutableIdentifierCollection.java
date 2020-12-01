@@ -1,21 +1,23 @@
 /*
- * ******************************************************************************
- * sdrtrunk
- * Copyright (C) 2014-2019 Dennis Sheirer
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2019 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>
- * *****************************************************************************
  */
 
 package io.github.dsheirer.identifier;
@@ -25,8 +27,9 @@ import io.github.dsheirer.sample.Listener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Iterator;
+import java.util.List;
 
 /**
  * Identifier collection with methods for changing or updating managed identifiers
@@ -37,12 +40,25 @@ public class MutableIdentifierCollection extends IdentifierCollection implements
     private final static Logger mLog = LoggerFactory.getLogger(MutableIdentifierCollection.class);
     private Listener<IdentifierUpdateNotification> mListener;
 
+    public MutableIdentifierCollection(int timeslot)
+    {
+        super(timeslot);
+    }
+
     public MutableIdentifierCollection()
     {
+        super(0);
     }
 
     public MutableIdentifierCollection(Collection<Identifier> identifiers)
     {
+        this(identifiers, 0);
+    }
+
+    public MutableIdentifierCollection(Collection<Identifier> identifiers, int timeslot)
+    {
+        super(timeslot);
+
         for(Identifier identifier: identifiers)
         {
             update(identifier);
@@ -83,10 +99,9 @@ public class MutableIdentifierCollection extends IdentifierCollection implements
      */
     private void notifyAdd(Identifier identifier)
     {
-        setUpdated(true);
         if(mListener != null)
         {
-            mListener.receive(new IdentifierUpdateNotification(identifier, IdentifierUpdateNotification.Operation.ADD));
+            mListener.receive(new IdentifierUpdateNotification(identifier, IdentifierUpdateNotification.Operation.ADD, getTimeslot()));
         }
     }
 
@@ -95,11 +110,10 @@ public class MutableIdentifierCollection extends IdentifierCollection implements
      */
     private void notifyRemove(Identifier identifier)
     {
-        setUpdated(true);
         if(mListener != null)
         {
             mListener.receive(new IdentifierUpdateNotification(identifier,
-                IdentifierUpdateNotification.Operation.REMOVE));
+                IdentifierUpdateNotification.Operation.REMOVE, getTimeslot()));
         }
     }
 
@@ -247,12 +261,11 @@ public class MutableIdentifierCollection extends IdentifierCollection implements
      */
     public void clear()
     {
-        Iterator<Identifier> it = mIdentifiers.iterator();
+        List<Identifier> identifiers = new ArrayList<>();
 
-        while(it.hasNext())
+        for(Identifier identifier: identifiers)
         {
-            notifyRemove(it.next());
-            it.remove();
+            remove(identifier);
         }
     }
 
@@ -261,18 +274,13 @@ public class MutableIdentifierCollection extends IdentifierCollection implements
      */
     public void remove(IdentifierClass identifierClass)
     {
-        Iterator<Identifier> it = mIdentifiers.iterator();
+        List<Identifier> identifiers = new ArrayList<>(mIdentifiers);
 
-        Identifier next = null;
-
-        while(it.hasNext())
+        for(Identifier identifier: identifiers)
         {
-            next = it.next();
-
-            if(next.getIdentifierClass() == identifierClass)
+            if(identifier.getIdentifierClass() == identifierClass)
             {
-                it.remove();
-                notifyRemove(next);
+                remove(identifier);
             }
         }
     }
@@ -282,18 +290,13 @@ public class MutableIdentifierCollection extends IdentifierCollection implements
      */
     public void remove(Form form)
     {
-        Iterator<Identifier> it = mIdentifiers.iterator();
+        List<Identifier> identifiers = new ArrayList<>(mIdentifiers);
 
-        Identifier next = null;
-
-        while(it.hasNext())
+        for(Identifier identifier: identifiers)
         {
-            next = it.next();
-
-            if(next.getForm() == form)
+            if(identifier.getForm() == form)
             {
-                it.remove();
-                notifyRemove(next);
+                remove(identifier);
             }
         }
     }
@@ -303,18 +306,13 @@ public class MutableIdentifierCollection extends IdentifierCollection implements
      */
     public void remove(Role role)
     {
-        Iterator<Identifier> it = mIdentifiers.iterator();
+        List<Identifier> identifiers = new ArrayList<>(mIdentifiers);
 
-        Identifier next = null;
-
-        while(it.hasNext())
+        for(Identifier identifier: identifiers)
         {
-            next = it.next();
-
-            if(next.getRole() == role)
+            if(identifier.getRole() == role)
             {
-                it.remove();
-                notifyRemove(next);
+                remove(identifier);
             }
         }
     }
@@ -324,18 +322,15 @@ public class MutableIdentifierCollection extends IdentifierCollection implements
      */
     public void remove(IdentifierClass identifierClass, Form form, Role role)
     {
-        Iterator<Identifier> it = mIdentifiers.iterator();
+        List<Identifier> identifiers = new ArrayList<>(mIdentifiers);
 
-        Identifier next = null;
-
-        while(it.hasNext())
+        for(Identifier identifier: identifiers)
         {
-            next = it.next();
-
-            if(next.getIdentifierClass() == identifierClass && next.getForm() == form && next.getRole() == role)
+            if(identifier.getIdentifierClass() == identifierClass &&
+                identifier.getForm() == form &&
+                identifier.getRole() == role)
             {
-                it.remove();
-                notifyRemove(next);
+                remove(identifier);
             }
         }
     }
@@ -345,18 +340,13 @@ public class MutableIdentifierCollection extends IdentifierCollection implements
      */
     public void remove(IdentifierClass identifierClass, Role role)
     {
-        Iterator<Identifier> it = mIdentifiers.iterator();
+        List<Identifier> identifiers = new ArrayList<>(mIdentifiers);
 
-        Identifier next = null;
-
-        while(it.hasNext())
+        for(Identifier identifier: identifiers)
         {
-            next = it.next();
-
-            if(next.getIdentifierClass() == identifierClass && next.getRole() == role)
+            if(identifier.getIdentifierClass() == identifierClass && identifier.getRole() == role)
             {
-                it.remove();
-                notifyRemove(next);
+                remove(identifier);
             }
         }
     }
@@ -365,26 +355,25 @@ public class MutableIdentifierCollection extends IdentifierCollection implements
      * Implements the listener interface to receive notifications of identifier updates.  This allows an
      * identifier collection to maintain a synchronized state with a remote identifier collection.
      *
+     * Note: this method performs a silent add/update/remove on on the local collection and does not rebroadcast
+     * the update to a registered listener in order to prevent infinite loop updates.
+     *
      * @param identifierUpdateNotification to add or remove an identifier
      */
     @Override
     public void receive(IdentifierUpdateNotification identifierUpdateNotification)
     {
-        if(identifierUpdateNotification.isAdd())
+        //Only process notifications that match this timeslot
+        if(identifierUpdateNotification.getTimeslot() == getTimeslot())
         {
-            update(identifierUpdateNotification.getIdentifier());
-        }
-        else if(identifierUpdateNotification.isRemove())
-        {
-            remove(identifierUpdateNotification.getIdentifier());
-        }
-        else if(identifierUpdateNotification.isSilentAdd())
-        {
-            silentUpdate(identifierUpdateNotification.getIdentifier());
-        }
-        else if(identifierUpdateNotification.isSilentRemove())
-        {
-            silentRemove(identifierUpdateNotification.getIdentifier());
+            if(identifierUpdateNotification.isAdd() || identifierUpdateNotification.isSilentAdd())
+            {
+                silentUpdate(identifierUpdateNotification.getIdentifier());
+            }
+            else if(identifierUpdateNotification.isRemove() || identifierUpdateNotification.isSilentRemove())
+            {
+                silentRemove(identifierUpdateNotification.getIdentifier());
+            }
         }
     }
 
@@ -394,9 +383,7 @@ public class MutableIdentifierCollection extends IdentifierCollection implements
      */
     public IdentifierCollection copyOf()
     {
-        IdentifierCollection copy = new IdentifierCollection(getIdentifiers());
-        copy.setUpdated(isUpdated());
-        setUpdated(false);
+        IdentifierCollection copy = new IdentifierCollection(getIdentifiers(), getTimeslot());
         return copy;
     }
 }

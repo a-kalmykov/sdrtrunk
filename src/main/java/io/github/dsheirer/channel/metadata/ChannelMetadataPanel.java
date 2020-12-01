@@ -1,7 +1,6 @@
 /*
- * ******************************************************************************
- * sdrtrunk
- * Copyright (C) 2014-2019 Dennis Sheirer
+ * *****************************************************************************
+ *  Copyright (C) 2014-2020 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,8 +14,9 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
- * *****************************************************************************
+ * ****************************************************************************
  */
+
 package io.github.dsheirer.channel.metadata;
 
 import com.google.common.base.Joiner;
@@ -25,18 +25,22 @@ import io.github.dsheirer.channel.state.State;
 import io.github.dsheirer.controller.channel.Channel;
 import io.github.dsheirer.controller.channel.ChannelModel;
 import io.github.dsheirer.controller.channel.ChannelProcessingManager;
-import io.github.dsheirer.controller.channel.ChannelUtils;
-import io.github.dsheirer.icon.IconManager;
+import io.github.dsheirer.eventbus.MyEventBus;
+import io.github.dsheirer.gui.playlist.channel.ViewChannelRequest;
+import io.github.dsheirer.icon.IconModel;
 import io.github.dsheirer.identifier.Identifier;
 import io.github.dsheirer.identifier.configuration.FrequencyConfigurationIdentifier;
 import io.github.dsheirer.identifier.decoder.ChannelStateIdentifier;
 import io.github.dsheirer.module.ProcessingChain;
+import io.github.dsheirer.playlist.PlaylistManager;
 import io.github.dsheirer.preference.UserPreferences;
 import io.github.dsheirer.preference.identifier.TalkgroupFormatPreference;
 import io.github.dsheirer.preference.swing.JTableColumnWidthMonitor;
 import io.github.dsheirer.sample.Broadcaster;
 import io.github.dsheirer.sample.Listener;
 import net.miginfocom.swing.MigLayout;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.swing.JLabel;
 import javax.swing.JMenuItem;
@@ -53,32 +57,34 @@ import java.awt.Component;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.text.DecimalFormat;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
 public class ChannelMetadataPanel extends JPanel implements ListSelectionListener
 {
+    private final static Logger mLog = LoggerFactory.getLogger(ChannelMetadataPanel.class);
+
     private static final String TABLE_PREFERENCE_KEY = "channel.metadata.panel";
     private ChannelModel mChannelModel;
     private ChannelProcessingManager mChannelProcessingManager;
-    private IconManager mIconManager;
+    private IconModel mIconModel;
     private UserPreferences mUserPreferences;
     private JTable mTable;
     private Broadcaster<ProcessingChain> mSelectedProcessingChainBroadcaster = new Broadcaster<>();
-    private Map<State,Color> mBackgroundColors = new HashMap<>();
-    private Map<State,Color> mForegroundColors = new HashMap<>();
+    private Map<State,Color> mBackgroundColors = new EnumMap<>(State.class);
+    private Map<State,Color> mForegroundColors = new EnumMap<>(State.class);
     private JTableColumnWidthMonitor mTableColumnMonitor;
+    private Channel mUserSelectedChannel;
 
     /**
      * Table view for currently decoding channel metadata
      */
-    public ChannelMetadataPanel(ChannelModel channelModel, ChannelProcessingManager channelProcessingManager,
-                                IconManager iconManager, UserPreferences userPreferences)
+    public ChannelMetadataPanel(PlaylistManager playlistManager, IconModel iconModel, UserPreferences userPreferences)
     {
-        mChannelModel = channelModel;
-        mChannelProcessingManager = channelProcessingManager;
-        mIconManager = iconManager;
+        mChannelModel = playlistManager.getChannelModel();
+        mChannelProcessingManager = playlistManager.getChannelProcessingManager();
+        mIconModel = iconModel;
         mUserPreferences = userPreferences;
         init();
     }
@@ -91,6 +97,7 @@ public class ChannelMetadataPanel extends JPanel implements ListSelectionListene
         setLayout( new MigLayout( "insets 0 0 0 0", "[grow,fill]", "[grow,fill]") );
 
         mTable = new JTable(mChannelProcessingManager.getChannelMetadataModel());
+        mChannelProcessingManager.getChannelMetadataModel().setChannelAddListener(new ChannelAddListener());
 
         DefaultTableCellRenderer renderer = (DefaultTableCellRenderer)mTable.getDefaultRenderer(String.class);
         renderer.setHorizontalAlignment(SwingConstants.CENTER);
@@ -128,7 +135,7 @@ public class ChannelMetadataPanel extends JPanel implements ListSelectionListene
     private void setColors()
     {
         mBackgroundColors.put(State.ACTIVE, Color.CYAN);
-        mForegroundColors.put(State.ACTIVE, Color.YELLOW);
+        mForegroundColors.put(State.ACTIVE, Color.BLUE);
         mBackgroundColors.put(State.CALL, Color.BLUE);
         mForegroundColors.put(State.CALL, Color.YELLOW);
         mBackgroundColors.put(State.CONTROL, Color.ORANGE);
@@ -165,12 +172,10 @@ public class ChannelMetadataPanel extends JPanel implements ListSelectionListene
 
                 if(selectedMetadata != null)
                 {
-                    Channel selectedChannel = mChannelProcessingManager.getChannelMetadataModel()
+                    mUserSelectedChannel = mChannelProcessingManager.getChannelMetadataModel()
                         .getChannelFromMetadata(selectedMetadata);
 
-
-
-                    processingChain = mChannelProcessingManager.getProcessingChain(selectedChannel);
+                    processingChain = mChannelProcessingManager.getProcessingChain(mUserSelectedChannel);
                 }
             }
 
@@ -240,7 +245,7 @@ public class ChannelMetadataPanel extends JPanel implements ListSelectionListene
                 if(!aliases.isEmpty())
                 {
                     label.setText(Joiner.on(", ").skipNulls().join(aliases));
-                    label.setIcon(mIconManager.getIcon(aliases.get(0).getIconName(), IconManager.DEFAULT_ICON_SIZE));
+                    label.setIcon(mIconModel.getIcon(aliases.get(0).getIconName(), IconModel.DEFAULT_ICON_SIZE));
                     label.setForeground(aliases.get(0).getDisplayColor());
                 }
                 else
@@ -408,11 +413,12 @@ public class ChannelMetadataPanel extends JPanel implements ListSelectionListene
 
                             if(channel != null)
                             {
-                                popupMenu.add(ChannelUtils.getContextMenu(mChannelModel, mChannelProcessingManager, channel, mTable));
+                                JMenuItem viewChannel = new JMenuItem("View/Edit: " + channel.getShortTitle());
+                                viewChannel.addActionListener(e2 -> MyEventBus.getGlobalEventBus().post(new ViewChannelRequest(channel)));
+                                popupMenu.add(viewChannel);
                                 populated = true;
                             }
                         }
-
                     }
                 }
 
@@ -422,6 +428,41 @@ public class ChannelMetadataPanel extends JPanel implements ListSelectionListene
                 }
 
                 popupMenu.show(mTable, e.getX(), e.getY());
+            }
+        }
+    }
+
+    /**
+     * Listener to be notified when a channel and associated channel metadata(s) are added to the underlying
+     * channel metadata model.
+     *
+     * When a channel is added, it is compared the the last user selected channel and if they are the same, it
+     * invokes a selection event on the channel metadata row so that the channel metadata is re-selected.  This is
+     * primarily a hack to counter-act the DMR Capacity+ REST channel rotation where a channel is converted to a
+     * traffic channel and the previous channel is restarted.  The UI effect is that the user selected channel row
+     * in the Now Playing window continually loses selection over the channel and causes the user to perpetually
+     * chase the channel row.
+     */
+    public class ChannelAddListener implements Listener<ChannelAndMetadata>
+    {
+        @Override
+        public void receive(ChannelAndMetadata channelAndMetadata)
+        {
+            if(mUserSelectedChannel != null &&
+               mUserSelectedChannel.getChannelID() == channelAndMetadata.getChannel().getChannelID())
+            {
+                List<ChannelMetadata> metadata = channelAndMetadata.getChannelMetadata();
+
+                if(metadata.size() > 0)
+                {
+                    int modelRow = mChannelProcessingManager.getChannelMetadataModel().getRow(metadata.get(0));
+
+                    if(modelRow >= 0)
+                    {
+                        int tableRow = mTable.convertRowIndexToView(modelRow);
+                        mTable.getSelectionModel().setSelectionInterval(tableRow, tableRow);
+                    }
+                }
             }
         }
     }

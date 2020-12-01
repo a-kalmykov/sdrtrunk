@@ -1,21 +1,23 @@
 /*
- * ******************************************************************************
- * sdrtrunk
- * Copyright (C) 2014-2018 Dennis Sheirer
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2019 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>
- * *****************************************************************************
  */
 package io.github.dsheirer.module.decode.passport;
 
@@ -32,16 +34,14 @@ import io.github.dsheirer.message.IMessage;
 import io.github.dsheirer.message.MessageType;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.event.DecodeEvent;
+import io.github.dsheirer.module.decode.passport.identifier.PassportRadioId;
 import io.github.dsheirer.module.decode.passport.identifier.PassportTalkgroup;
 import io.github.dsheirer.protocol.Protocol;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -54,7 +54,7 @@ public class PassportDecoderState extends DecoderState
 
     private Set<PassportTalkgroup> mTalkgroupsFirstHeard = new HashSet<>();
     private Set<PassportTalkgroup> mTalkgroups = new TreeSet<>();
-    private Set<PassportTalkgroup> mMobileIDs = new TreeSet<>();
+    private Set<PassportRadioId> mMobileIDs = new TreeSet<>();
     private Map<Integer,Long> mSiteLCNs = new HashMap<>();
     private Map<Integer,Long> mNeighborLCNs = new HashMap<>();
     private Map<Integer,DecodeEvent> mDetectedCalls = new HashMap<>();
@@ -206,7 +206,7 @@ public class PassportDecoderState extends DecoderState
                         broadcast(new DecoderStateEvent(this, Event.END, State.CALL));
                         break;
                     case ID_RDIO:
-                        PassportTalkgroup mobileId = passport.getFromIdentifier();
+                        PassportRadioId mobileId = passport.getFromIdentifier();
                         mMobileIDs.add(mobileId);
                         getIdentifierCollection().update(mobileId);
 
@@ -258,15 +258,14 @@ public class PassportDecoderState extends DecoderState
         }
         else
         {
-            List<Integer> channels = new ArrayList<>(mSiteLCNs.keySet());
-            Collections.sort(channels);
-
-            for(Integer channel : channels)
-            {
-                sb.append("  " + channel);
-                sb.append("\t" + mSiteLCNs.get(channel));
-                sb.append("\n");
-            }
+            mSiteLCNs.entrySet()
+                    .stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .forEach(entry -> {
+                        sb.append("  " + entry.getKey());
+                        sb.append("\t" + entry.getValue());
+                        sb.append("\n");
+                    });
         }
 
         sb.append("\nNeighbor Channels\n");
@@ -277,15 +276,14 @@ public class PassportDecoderState extends DecoderState
         }
         else
         {
-            List<Integer> channels = new ArrayList<>(mNeighborLCNs.keySet());
-            Collections.sort(channels);
-
-            for(Integer channel : channels)
-            {
-                sb.append("  " + channel);
-                sb.append("\t" + mNeighborLCNs.get(channel));
-                sb.append("\n");
-            }
+            mNeighborLCNs.entrySet()
+                    .stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .forEach(entry -> {
+                        sb.append("  " + entry.getKey());
+                        sb.append("\t" + entry.getValue());
+                        sb.append("\n");
+                    });
         }
 
         sb.append("\nTalkgroups\n");
@@ -296,11 +294,9 @@ public class PassportDecoderState extends DecoderState
         }
         else
         {
-            Iterator<PassportTalkgroup> it = mTalkgroups.iterator();
 
-            while(it.hasNext())
-            {
-                sb.append("  ").append(it.next()).append("\n");
+            for (PassportTalkgroup mTalkgroup : mTalkgroups) {
+                sb.append("  ").append(mTalkgroup).append("\n");
             }
         }
 
@@ -312,11 +308,8 @@ public class PassportDecoderState extends DecoderState
         }
         else
         {
-            Iterator<PassportTalkgroup> it = mMobileIDs.iterator();
-
-            while(it.hasNext())
-            {
-                sb.append("  ").append(it.next()).append("\n");
+            for (PassportRadioId mMobileID : mMobileIDs) {
+                sb.append("  ").append(mMobileID).append("\n");
             }
         }
 
@@ -325,6 +318,7 @@ public class PassportDecoderState extends DecoderState
 
     public void reset()
     {
+        super.reset();
         getIdentifierCollection().remove(IdentifierClass.USER);
         mTalkgroupsFirstHeard.clear();
         mTalkgroups.clear();
@@ -410,10 +404,10 @@ public class PassportDecoderState extends DecoderState
     {
         switch(event.getEvent())
         {
-            case RESET:
+            case REQUEST_RESET:
                 resetState();
                 break;
-            case SOURCE_FREQUENCY:
+            case NOTIFICATION_SOURCE_FREQUENCY:
                 mFrequency = event.getFrequency();
                 break;
             default:

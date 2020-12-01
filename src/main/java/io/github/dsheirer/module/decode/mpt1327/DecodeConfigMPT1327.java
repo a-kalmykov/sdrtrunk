@@ -1,34 +1,43 @@
-/*******************************************************************************
- *     SDR Trunk 
- *     Copyright (C) 2014 Dennis Sheirer
+/*
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2019 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
  *
- *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <http://www.gnu.org/licenses/>
- ******************************************************************************/
+ */
 package io.github.dsheirer.module.decode.mpt1327;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.config.DecodeConfiguration;
+import io.github.dsheirer.module.decode.config.WithCallTimeout;
 import io.github.dsheirer.source.tuner.channel.ChannelSpecification;
 
-public class DecodeConfigMPT1327 extends DecodeConfiguration
+public class DecodeConfigMPT1327 extends DecodeConfiguration implements WithCallTimeout
 {
+    public static final int CHANNEL_ROTATION_DELAY_MINIMUM_MS = 500;
+    public static final int CHANNEL_ROTATION_DELAY_DEFAULT_MS = 500;
+    public static final int CHANNEL_ROTATION_DELAY_MAXIMUM_MS = 2000;
+
     private String mChannelMapName;
     private Sync mSync = Sync.NORMAL;
 
-    private int mCallTimeout = DEFAULT_CALL_TIMEOUT_SECONDS;
+    private int mCallTimeoutSeconds = DEFAULT_CALL_TIMEOUT_DELAY_SECONDS;
     private int mTrafficChannelPoolSize = TRAFFIC_CHANNEL_LIMIT_DEFAULT;
 
     public DecodeConfigMPT1327()
@@ -64,25 +73,25 @@ public class DecodeConfigMPT1327 extends DecodeConfiguration
     }
 
     @JacksonXmlProperty(isAttribute = true, localName = "call_timeout")
-    public int getCallTimeout()
+    public int getCallTimeoutSeconds()
     {
-        return mCallTimeout;
+        return mCallTimeoutSeconds;
     }
 
     /**
-     * Sets the call timeout value in seconds ( 10 - 600 );
+     * Sets the call timeout value in seconds ( 1 - 180 );
      *
      * @param timeout
      */
-    public void setCallTimeout(int timeout)
+    public void setCallTimeoutSeconds(int timeout)
     {
         if(CALL_TIMEOUT_MINIMUM <= timeout && timeout <= CALL_TIMEOUT_MAXIMUM)
         {
-            mCallTimeout = timeout;
+            mCallTimeoutSeconds = timeout;
         }
         else
         {
-            mCallTimeout = DEFAULT_CALL_TIMEOUT_SECONDS;
+            mCallTimeoutSeconds = DEFAULT_CALL_TIMEOUT_DELAY_SECONDS;
         }
     }
 

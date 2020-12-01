@@ -1,21 +1,23 @@
 /*
- * ******************************************************************************
- * sdrtrunk
- * Copyright (C) 2014-2019 Dennis Sheirer
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2020 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>
- * *****************************************************************************
  */
 package io.github.dsheirer.channel.metadata;
 
@@ -24,13 +26,16 @@ import io.github.dsheirer.alias.Alias;
 import io.github.dsheirer.controller.channel.Channel;
 import io.github.dsheirer.eventbus.MyEventBus;
 import io.github.dsheirer.identifier.Identifier;
+import io.github.dsheirer.identifier.decoder.DecoderLogicalChannelNameIdentifier;
 import io.github.dsheirer.preference.PreferenceType;
+import io.github.dsheirer.sample.Listener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.table.AbstractTableModel;
 import java.awt.EventQueue;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,10 +58,11 @@ public class ChannelMetadataModel extends AbstractTableModel implements IChannel
 
     private List<ChannelMetadata> mChannelMetadata = new ArrayList();
     private Map<ChannelMetadata,Channel> mMetadataChannelMap = new HashMap();
+    private Listener<ChannelAndMetadata> mChannelAddListener;
 
     public ChannelMetadataModel()
     {
-        MyEventBus.getEventBus().register(this);
+        MyEventBus.getGlobalEventBus().register(this);
     }
 
     /**
@@ -66,46 +72,89 @@ public class ChannelMetadataModel extends AbstractTableModel implements IChannel
     @Subscribe
     public void preferenceUpdated(PreferenceType preferenceType)
     {
-        if(preferenceType == PreferenceType.IDENTIFIER)
+        if(preferenceType == PreferenceType.TALKGROUP_FORMAT)
         {
-            for(int row = 0; row < mChannelMetadata.size(); row++)
-            {
-                fireTableCellUpdated(row, COLUMN_USER_FROM);
-                fireTableCellUpdated(row, COLUMN_USER_TO);
-            }
+            EventQueue.invokeLater(() -> {
+                for(int row = 0; row < mChannelMetadata.size(); row++)
+                {
+                    fireTableCellUpdated(row, COLUMN_USER_FROM);
+                    fireTableCellUpdated(row, COLUMN_USER_TO);
+                }
+            });
         }
     }
 
+    public void dispose()
+    {
+        MyEventBus.getGlobalEventBus().unregister(this);
+    }
 
-    public void add(ChannelMetadata channelMetadata, Channel channel)
+    /**
+     * Lookup model row for the specified channel metadata
+     */
+    public int getRow(ChannelMetadata channelMetadata)
+    {
+        if(mChannelMetadata.contains(channelMetadata))
+        {
+            return mChannelMetadata.indexOf(channelMetadata);
+        }
+
+        return -1;
+    }
+
+    /**
+     * Registers the listener to be notified when channel metadata(s) are added to the model.
+     * @param listener to receive channel associated with the channel metadata(s) that were added
+     */
+    public void setChannelAddListener(Listener<ChannelAndMetadata> listener)
+    {
+        mChannelAddListener = listener;
+    }
+
+    public void add(ChannelAndMetadata channelAndMetadata)
     {
         //Execute on the swing thread to avoid threading issues
-        EventQueue.invokeLater(new Runnable()
-        {
-            @Override
-            public void run()
+        EventQueue.invokeLater(() -> {
+            for(ChannelMetadata channelMetadata: channelAndMetadata.getChannelMetadata())
             {
                 mChannelMetadata.add(channelMetadata);
-                mMetadataChannelMap.put(channelMetadata, channel);
+                mMetadataChannelMap.put(channelMetadata, channelAndMetadata.getChannel());
                 int index = mChannelMetadata.indexOf(channelMetadata);
                 fireTableRowsInserted(index, index);
                 channelMetadata.setUpdateEventListener(ChannelMetadataModel.this);
             }
+
+            if(mChannelAddListener != null)
+            {
+                mChannelAddListener.receive(channelAndMetadata);
+            }
         });
+    }
+
+    /**
+     * Updates the mapping of channel metadata to the channel used to create the channel metadatas (and processing chain)
+     * @param channelMetadatas
+     * @param channel
+     */
+    public void updateChannelMetadataToChannelMap(Collection<ChannelMetadata> channelMetadatas, Channel channel)
+    {
+        for(ChannelMetadata channelMetadata: channelMetadatas)
+        {
+            mMetadataChannelMap.put(channelMetadata, channel);
+        }
     }
 
     public void remove(ChannelMetadata channelMetadata)
     {
         //Execute on the swing thread to avoid threading issues
-        EventQueue.invokeLater(new Runnable()
-        {
-            @Override
-            public void run()
+        EventQueue.invokeLater(() -> {
+            channelMetadata.removeUpdateEventListener();
+            int index = mChannelMetadata.indexOf(channelMetadata);
+            mChannelMetadata.remove(channelMetadata);
+            mMetadataChannelMap.remove(channelMetadata);
+
+            if(index >= 0)
             {
-                channelMetadata.removeUpdateEventListener();
-                int index = mChannelMetadata.indexOf(channelMetadata);
-                mChannelMetadata.remove(channelMetadata);
-                mMetadataChannelMap.remove(channelMetadata);
                 fireTableRowsDeleted(index, index);
             }
         });
@@ -161,6 +210,8 @@ public class ChannelMetadataModel extends AbstractTableModel implements IChannel
             case COLUMN_USER_FROM_ALIAS:
             case COLUMN_USER_TO_ALIAS:
                 return Alias.class;
+            case COLUMN_DECODER_LOGICAL_CHANNEL_NAME:
+                return String.class;
             default:
                 return Identifier.class;
         }
@@ -180,7 +231,31 @@ public class ChannelMetadataModel extends AbstractTableModel implements IChannel
                 case COLUMN_DECODER_TYPE:
                     return channelMetadata.getDecoderTypeConfigurationIdentifier();
                 case COLUMN_DECODER_LOGICAL_CHANNEL_NAME:
-                    return channelMetadata.getDecoderLogicalChannelNameIdentifier();
+                    DecoderLogicalChannelNameIdentifier id = channelMetadata.getDecoderLogicalChannelNameIdentifier();
+
+                    if(channelMetadata.hasTimeslot())
+                    {
+                        if(id == null)
+                        {
+                            return "TS:" + channelMetadata.getTimeslot();
+                        }
+                        else
+                        {
+                            String value = id.getValue().replace(" TS0", "").replace(" TS1", "");
+                            return value + " TS:" + channelMetadata.getTimeslot();
+                        }
+                    }
+                    else
+                    {
+                        if(id == null)
+                        {
+                            return null;
+                        }
+                        else
+                        {
+                            return id.getValue();
+                        }
+                    }
                 case COLUMN_CONFIGURATION_FREQUENCY:
                     return channelMetadata.getFrequencyConfigurationIdentifier();
                 case COLUMN_CONFIGURATION_CHANNEL:

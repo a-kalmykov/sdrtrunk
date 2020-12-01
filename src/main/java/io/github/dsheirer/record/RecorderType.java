@@ -1,18 +1,24 @@
-/*******************************************************************************
- * sdr-trunk
- * Copyright (C) 2014-2018 Dennis Sheirer
+/*
  *
- * This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
- * License as published by  the Free Software Foundation, either version 3 of the License, or  (at your option) any
- * later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2020 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- * This program is distributed in the hope that it will be useful,  but WITHOUT ANY WARRANTY; without even the implied
- * warranty of  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License  along with this program.
- * If not, see <http://www.gnu.org/licenses/>
- *
- ******************************************************************************/
+ */
 package io.github.dsheirer.record;
 
 import java.util.EnumSet;
@@ -23,7 +29,8 @@ import java.util.EnumSet;
 public enum RecorderType
 {
     /**
-     * Audio - 8kHz PCM -- **DO NOT USE - DEPRECATED - AUDIO RECORDING IS NOT MANAGED BY ALIASES
+     * Audio - 8kHz PCM -- **DO NOT USE - DEPRECATED - AUDIO RECORDING IS NOW MANAGED BY ALIASES AND/OR DECODE CONFIG
+     * for AM/NBFM
      */
 	AUDIO( "Audio (.wav)"),
 
@@ -45,7 +52,17 @@ public enum RecorderType
     /**
      * Traffic channel demodulated bit stream at the baud rate of the decoder
      */
-    TRAFFIC_DEMODULATED_BIT_STREAM("Traffic Channel Demodulated Bitstream (.bits)");
+    TRAFFIC_DEMODULATED_BIT_STREAM("Traffic Channel Demodulated Bitstream (.bits)"),
+
+    /**
+     * MBE Audio Codec frames
+     */
+    MBE_CALL_SEQUENCE("MBE Audio CODEC Frames (.mbe)"),
+
+    /**
+     * Traffic channel MBE Audio Codec frames
+     */
+    TRAFFIC_MBE_CALL_SEQUENCE("Traffic Channel MBE Audio CODEC Frames (.mbe)");
 
     private String mDisplayString;
 

@@ -35,7 +35,6 @@ import io.github.dsheirer.source.tuner.channel.TunerChannelSource;
 
 public class SourceManager
 {
-    private MixerManager mMixerManager;
     private RecordingSourceManager mRecordingSourceManager;
     private TunerManager mTunerManager;
     private TunerModel mTunerModel;
@@ -43,9 +42,8 @@ public class SourceManager
     public SourceManager(TunerModel tunerModel, SettingsManager settingsManager, UserPreferences userPreferences)
     {
         mTunerModel = tunerModel;
-        mMixerManager = new MixerManager();
         mRecordingSourceManager = new RecordingSourceManager(settingsManager);
-        mTunerManager = new TunerManager(mMixerManager, tunerModel, userPreferences);
+        mTunerManager = new TunerManager(tunerModel, userPreferences);
 
         //TODO: change mixer & recording managers to be models and hand them
         //in via the constructor.  Perform loading outside of this class.
@@ -58,11 +56,6 @@ public class SourceManager
     {
         mTunerManager.releaseTuners();
         mTunerManager.dispose();
-    }
-
-    public MixerManager getMixerManager()
-    {
-        return mMixerManager;
     }
 
     public RecordingSourceManager getRecordingSourceManager()
@@ -87,7 +80,7 @@ public class SourceManager
         switch(config.getSourceType())
         {
             case MIXER:
-                retVal = mMixerManager.getSource(config);
+                retVal = MixerManager.getSource(config);
                 break;
             case TUNER:
                 if(config instanceof SourceConfigTuner)
@@ -102,7 +95,7 @@ public class SourceManager
                 if(config instanceof SourceConfigTunerMultipleFrequency)
                 {
                     SourceConfigTunerMultipleFrequency sourceConfigTuner = (SourceConfigTunerMultipleFrequency)config;
-                    TunerChannel tunerChannel = sourceConfigTuner.getFirstTunerChannel(channelSpecification.getBandwidth());
+                    TunerChannel tunerChannel = sourceConfigTuner.getTunerChannel(channelSpecification.getBandwidth());
                     String preferredTuner = sourceConfigTuner.getPreferredTuner();
 
                     Source source = mTunerModel.getSource(tunerChannel, channelSpecification, preferredTuner);
@@ -116,6 +109,7 @@ public class SourceManager
                 break;
             case RECORDING:
                 retVal = mRecordingSourceManager.getSource(config, channelSpecification);
+                break;
             case NONE:
             default:
                 break;

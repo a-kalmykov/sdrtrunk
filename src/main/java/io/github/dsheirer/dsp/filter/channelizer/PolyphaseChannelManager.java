@@ -1,18 +1,24 @@
-/*******************************************************************************
- * sdr-trunk
- * Copyright (C) 2014-2018 Dennis Sheirer
+/*
  *
- * This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
- * License as published by  the Free Software Foundation, either version 3 of the License, or  (at your option) any
- * later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2020 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- * This program is distributed in the hope that it will be useful,  but WITHOUT ANY WARRANTY; without even the implied
- * warranty of  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License  along with this program.
- * If not, see <http://www.gnu.org/licenses/>
- *
- ******************************************************************************/
+ */
 package io.github.dsheirer.dsp.filter.channelizer;
 
 import io.github.dsheirer.dsp.filter.FilterFactory;
@@ -32,6 +38,7 @@ import io.github.dsheirer.source.tuner.TunerController;
 import io.github.dsheirer.source.tuner.channel.ChannelSpecification;
 import io.github.dsheirer.source.tuner.channel.TunerChannel;
 import io.github.dsheirer.source.tuner.channel.TunerChannelSource;
+import org.apache.commons.math3.util.FastMath;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -121,6 +128,18 @@ public class PolyphaseChannelManager implements ISourceEventProcessor
     }
 
     /**
+     * Signals to all provisioned tuner channel sources that the source complex buffer provider has an error and can
+     * no longer provide channels, so that the tuner channel source can notify the consumer of the error state.
+     */
+    public void setErrorMessage(String errorMessage)
+    {
+        for(TunerChannelSource tunerChannelSource: mChannelSources)
+        {
+            tunerChannelSource.setError(errorMessage);
+        }
+    }
+
+    /**
      * Current channel sample rate which is (2 * channel bandwidth).
      */
     public double getChannelSampleRate()
@@ -146,34 +165,25 @@ public class PolyphaseChannelManager implements ISourceEventProcessor
     {
         PolyphaseChannelSource channelSource = null;
 
-        try
+        List<Integer> polyphaseIndexes = mChannelCalculator.getChannelIndexes(tunerChannel);
+
+        IPolyphaseChannelOutputProcessor outputProcessor = getOutputProcessor(polyphaseIndexes);
+
+        if(outputProcessor != null)
         {
-            List<Integer> polyphaseIndexes = mChannelCalculator.getChannelIndexes(tunerChannel);
+            long centerFrequency = mChannelCalculator.getCenterFrequencyForIndexes(polyphaseIndexes);
 
-            IPolyphaseChannelOutputProcessor outputProcessor = getOutputProcessor(polyphaseIndexes);
-
-            if(outputProcessor != null)
+            try
             {
-                long centerFrequency = mChannelCalculator.getCenterFrequencyForIndexes(polyphaseIndexes);
+                channelSource = new PolyphaseChannelSource(tunerChannel, outputProcessor, mChannelSourceEventListener,
+                    mChannelCalculator.getChannelSampleRate(), centerFrequency, channelSpecification);
 
-                try
-                {
-                    channelSource = new PolyphaseChannelSource(tunerChannel, outputProcessor, mChannelSourceEventListener,
-                        mChannelCalculator.getChannelSampleRate(), centerFrequency, channelSpecification);
-
-                    mChannelSources.add(channelSource);
-                }
-                catch(FilterDesignException fde)
-                {
-                    mLog.debug("Couldn't design final output low pass filter for polyphase channel source");
-                }
+                mChannelSources.add(channelSource);
             }
-        }
-        catch(IllegalArgumentException iae)
-        {
-            mLog.info("Can't provide DDC for " + tunerChannel.toString() + " due to channelizer frequency [" +
-                mChannelCalculator.getCenterFrequency() + "] and sample rate [" +
-                (mChannelCalculator.getChannelCount() * mChannelCalculator.getChannelBandwidth()) + "]");
+            catch(FilterDesignException fde)
+            {
+                mLog.debug("Couldn't design final output low pass filter for polyphase channel source");
+            }
         }
 
         return channelSource;
@@ -299,6 +309,7 @@ public class PolyphaseChannelManager implements ISourceEventProcessor
             case NOTIFICATION_FREQUENCY_AND_SAMPLE_RATE_LOCKED:
             case NOTIFICATION_FREQUENCY_AND_SAMPLE_RATE_UNLOCKED:
             case NOTIFICATION_FREQUENCY_CORRECTION_CHANGE:
+            case NOTIFICATION_RECORDING_FILE_LOADED:
                 //no-op
                 break;
             default:
@@ -320,7 +331,7 @@ public class PolyphaseChannelManager implements ISourceEventProcessor
         double tunerSampleRate = mChannelCalculator.getSampleRate();
 
         //If the channelizer is not setup, or setup to the wrong sample rate, recreate it
-        if(mPolyphaseChannelizer == null || Math.abs(mPolyphaseChannelizer.getSampleRate() - tunerSampleRate) > 0.5)
+        if(mPolyphaseChannelizer == null || FastMath.abs(mPolyphaseChannelizer.getSampleRate() - tunerSampleRate) > 0.5)
         {
             if(mPolyphaseChannelizer != null && mPolyphaseChannelizer.getRegisteredChannelCount() > 0)
             {

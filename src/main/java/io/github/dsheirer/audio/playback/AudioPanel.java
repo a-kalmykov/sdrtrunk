@@ -23,17 +23,23 @@ import io.github.dsheirer.alias.AliasModel;
 import io.github.dsheirer.audio.AudioEvent;
 import io.github.dsheirer.audio.AudioException;
 import io.github.dsheirer.audio.IAudioController;
-import io.github.dsheirer.icon.IconManager;
+import io.github.dsheirer.eventbus.MyEventBus;
+import io.github.dsheirer.gui.preference.PreferenceEditorType;
+import io.github.dsheirer.gui.preference.ViewUserPreferenceEditorRequest;
+import io.github.dsheirer.icon.IconModel;
 import io.github.dsheirer.preference.UserPreferences;
 import io.github.dsheirer.sample.Listener;
 import io.github.dsheirer.settings.SettingsManager;
 import io.github.dsheirer.source.SourceManager;
 import io.github.dsheirer.source.mixer.MixerChannelConfiguration;
+import jiconfont.icons.font_awesome.FontAwesome;
+import jiconfont.swing.IconFontSwing;
 import net.miginfocom.swing.MigLayout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.sound.sampled.FloatControl;
+import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JMenu;
@@ -58,10 +64,10 @@ public class AudioPanel extends JPanel implements Listener<AudioEvent>
 
     private static final Logger mLog = LoggerFactory.getLogger(AudioPanel.class);
 
-    private static ImageIcon MUTED_ICON = IconManager.getScaledIcon("images/audio_muted.png", 20);
-    private static ImageIcon UNMUTED_ICON = IconManager.getScaledIcon("images/audio_unmuted.png", 20);
+    private static ImageIcon MUTED_ICON = IconModel.getScaledIcon("images/audio_muted.png", 20);
+    private static ImageIcon UNMUTED_ICON = IconModel.getScaledIcon("images/audio_unmuted.png", 20);
 
-    private IconManager mIconManager;
+    private IconModel mIconModel;
     private SettingsManager mSettingsManager;
     private SourceManager mSourceManager;
     private IAudioController mController;
@@ -71,10 +77,10 @@ public class AudioPanel extends JPanel implements Listener<AudioEvent>
     private JButton mMuteButton;
     private AudioChannelsPanel mAudioChannelsPanel;
 
-    public AudioPanel(IconManager iconManager, UserPreferences userPreferences, SettingsManager settingsManager,
+    public AudioPanel(IconModel iconModel, UserPreferences userPreferences, SettingsManager settingsManager,
                       SourceManager sourceManager, IAudioController controller, AliasModel aliasModel)
     {
-        mIconManager = iconManager;
+        mIconModel = iconModel;
         mSettingsManager = settingsManager;
         mSourceManager = sourceManager;
         mController = controller;
@@ -95,7 +101,7 @@ public class AudioPanel extends JPanel implements Listener<AudioEvent>
         mMuteButton.setBackground(getBackground());
         add(mMuteButton);
 
-        mAudioChannelsPanel = new AudioChannelsPanel(mIconManager, mUserPreferences, mSettingsManager, mController, mAliasModel);
+        mAudioChannelsPanel = new AudioChannelsPanel(mIconModel, mUserPreferences, mSettingsManager, mController, mAliasModel);
 
         add(mAudioChannelsPanel);
 
@@ -117,7 +123,7 @@ public class AudioPanel extends JPanel implements Listener<AudioEvent>
                     {
                         remove(mAudioChannelsPanel);
                         mAudioChannelsPanel.dispose();
-                        mAudioChannelsPanel = new AudioChannelsPanel(mIconManager, mUserPreferences, mSettingsManager, mController, mAliasModel);
+                        mAudioChannelsPanel = new AudioChannelsPanel(mIconModel, mUserPreferences, mSettingsManager, mController, mAliasModel);
                         add(mAudioChannelsPanel);
                         mAudioChannelsPanel.repaint();
                         revalidate();
@@ -169,34 +175,19 @@ public class AudioPanel extends JPanel implements Listener<AudioEvent>
                 JPopupMenu popup = new JPopupMenu();
 
 				/* Audio mixer/output selection menus */
-                JMenu outputMenu = new JMenu("Audio Output");
-
-                MixerChannelConfiguration[] mixerConfigurations =
-                    mSourceManager.getMixerManager().getOutputMixers();
-
-                for(MixerChannelConfiguration mixerConfig : mixerConfigurations)
+                JMenuItem outputMenu = new JMenuItem("Configure ...");
+                Icon icon = IconFontSwing.buildIcon(FontAwesome.COG, 14);
+                outputMenu.setIcon(icon);
+                outputMenu.addActionListener(new ActionListener()
                 {
-                    MixerSelectionItem mixerItem = new MixerSelectionItem(mixerConfig);
-
-                    try
+                    @Override
+                    public void actionPerformed(ActionEvent e)
                     {
-                        MixerChannelConfiguration current = mController.getMixerChannelConfiguration();
-
-                        if(current != null && current.equals(mixerConfig))
-                        {
-                            mixerItem.setSelected(true);
-                        }
+                        MyEventBus.getGlobalEventBus().post(new ViewUserPreferenceEditorRequest(PreferenceEditorType.AUDIO_OUTPUT));
                     }
-                    catch(AudioException e)
-                    {
-                        mLog.error("Error while detecting current mixer "
-                            + "channel configuration", e);
-                    }
-
-                    outputMenu.add(mixerItem);
-                }
-
+                });
                 popup.add(outputMenu);
+                popup.add(new JPopupMenu.Separator());
 
 				/* Audio output mute and volume control */
                 for(AudioOutput output : mController.getAudioOutputs())

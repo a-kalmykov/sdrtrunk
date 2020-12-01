@@ -1,20 +1,24 @@
-/*******************************************************************************
- *     SDR Trunk 
- *     Copyright (C) 2014 Dennis Sheirer
+/*
  *
- *     This program is free software: you can redistribute it and/or modify
- *     it under the terms of the GNU General Public License as published by
- *     the Free Software Foundation, either version 3 of the License, or
- *     (at your option) any later version.
+ *  * ******************************************************************************
+ *  * Copyright (C) 2014-2020 Dennis Sheirer
+ *  *
+ *  * This program is free software: you can redistribute it and/or modify
+ *  * it under the terms of the GNU General Public License as published by
+ *  * the Free Software Foundation, either version 3 of the License, or
+ *  * (at your option) any later version.
+ *  *
+ *  * This program is distributed in the hope that it will be useful,
+ *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  * GNU General Public License for more details.
+ *  *
+ *  * You should have received a copy of the GNU General Public License
+ *  * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ *  * *****************************************************************************
  *
- *     This program is distributed in the hope that it will be useful,
- *     but WITHOUT ANY WARRANTY; without even the implied warranty of
- *     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *     GNU General Public License for more details.
  *
- *     You should have received a copy of the GNU General Public License
- *     along with this program.  If not, see <http://www.gnu.org/licenses/>
- ******************************************************************************/
+ */
 package io.github.dsheirer.source.tuner.rtl.e4k;
 
 import io.github.dsheirer.source.SourceException;
@@ -253,7 +257,7 @@ public class E4KTunerController extends RTL2832TunerController
         String deviceName = getTunerType().getLabel() + " " + getUniqueID();
 
         mUSBTransferProcessor = new RTL2832USBTransferProcessor(deviceName, mDeviceHandle, mNativeBufferConverter,
-            USB_TRANSFER_BUFFER_SIZE_HIGH_SAMPLE_RATE);
+            USB_TRANSFER_BUFFER_SIZE_HIGH_SAMPLE_RATE, this);
     }
 
     @Override
@@ -380,6 +384,8 @@ public class E4KTunerController extends RTL2832TunerController
             actualFrequency = calculateActualFrequency(pll, z, x);
         }
 
+        mLock.lock();
+
         /* Apply the actual frequency */
         try
         {
@@ -423,6 +429,10 @@ public class E4KTunerController extends RTL2832TunerController
         {
             throw new SourceException("E4K tuner controller - error tuning "
                 + "frequency [" + frequency + "]", e);
+        }
+        finally
+        {
+            mLock.unlock();
         }
     }
 
@@ -653,38 +663,46 @@ public class E4KTunerController extends RTL2832TunerController
      * @param gain
      * @throws UsbException
      */
-    public void setLNAGain(E4KLNAGain gain, boolean controlI2CRepeater)
-        throws UsbException
+    public void setLNAGain(E4KLNAGain gain, boolean controlI2CRepeater) throws UsbException
     {
-        if(controlI2CRepeater)
+        mLock.lock();
+
+        try
         {
-            enableI2CRepeater(mDeviceHandle, true);
+            if(controlI2CRepeater)
+            {
+                enableI2CRepeater(mDeviceHandle, true);
+            }
+
+            if(gain == E4KLNAGain.AUTOMATIC)
+            {
+                writeMaskedE4KRegister(Register.AGC1,
+                    AGC1_MOD_MASK,
+                    AGCMode.IF_SERIAL_LNA_AUTON.getValue(),
+                    false);
+            }
+            else
+            {
+                writeMaskedE4KRegister(Register.AGC1,
+                    AGC1_MOD_MASK,
+                    AGCMode.SERIAL.getValue(),
+                    false);
+
+
+                writeMaskedE4KRegister(E4KLNAGain.getRegister(),
+                    E4KLNAGain.getMask(),
+                    gain.getValue(),
+                    false);
+            }
+
+            if(controlI2CRepeater)
+            {
+                enableI2CRepeater(mDeviceHandle, false);
+            }
         }
-
-        if(gain == E4KLNAGain.AUTOMATIC)
+        finally
         {
-            writeMaskedE4KRegister(Register.AGC1,
-                AGC1_MOD_MASK,
-                AGCMode.IF_SERIAL_LNA_AUTON.getValue(),
-                false);
-        }
-        else
-        {
-            writeMaskedE4KRegister(Register.AGC1,
-                AGC1_MOD_MASK,
-                AGCMode.SERIAL.getValue(),
-                false);
-
-
-            writeMaskedE4KRegister(E4KLNAGain.getRegister(),
-                E4KLNAGain.getMask(),
-                gain.getValue(),
-                false);
-        }
-
-        if(controlI2CRepeater)
-        {
-            enableI2CRepeater(mDeviceHandle, false);
+            mLock.unlock();
         }
     }
 
@@ -695,8 +713,16 @@ public class E4KTunerController extends RTL2832TunerController
      */
     public E4KLNAGain getLNAGain(boolean controlI2CRepeater) throws UsbException
     {
-        return E4KLNAGain.fromRegisterValue(
-            readE4KRegister(E4KLNAGain.getRegister(), controlI2CRepeater));
+        mLock.lock();
+
+        try
+        {
+            return E4KLNAGain.fromRegisterValue(readE4KRegister(E4KLNAGain.getRegister(), controlI2CRepeater));
+        }
+        finally
+        {
+            mLock.unlock();
+        }
     }
 
     /**
@@ -707,13 +733,18 @@ public class E4KTunerController extends RTL2832TunerController
      * @param gain
      * @throws UsbException
      */
-    public void setEnhanceGain(E4KEnhanceGain gain, boolean controlI2CRepeater)
-        throws UsbException
+    public void setEnhanceGain(E4KEnhanceGain gain, boolean controlI2CRepeater) throws UsbException
     {
-        writeMaskedE4KRegister(E4KEnhanceGain.getRegister(),
-            E4KEnhanceGain.getMask(),
-            gain.getValue(),
-            controlI2CRepeater);
+        mLock.lock();
+
+        try
+        {
+            writeMaskedE4KRegister(E4KEnhanceGain.getRegister(), E4KEnhanceGain.getMask(), gain.getValue(), controlI2CRepeater);
+        }
+        finally
+        {
+            mLock.unlock();
+        }
     }
 
     /**
@@ -724,72 +755,90 @@ public class E4KTunerController extends RTL2832TunerController
      * @return
      * @throws UsbException
      */
-    public E4KEnhanceGain getEnhanceGain(boolean controlI2CRepeater)
-        throws UsbException
+    public E4KEnhanceGain getEnhanceGain(boolean controlI2CRepeater) throws UsbException
     {
-        return E4KEnhanceGain.fromRegisterValue(
-            readE4KRegister(E4KEnhanceGain.getRegister(), controlI2CRepeater));
-    }
+        mLock.lock();
 
-    public void setMixerGain(E4KMixerGain gain, boolean controlI2CRepeater)
-        throws UsbException
-    {
-        if(controlI2CRepeater)
+        try
         {
-            enableI2CRepeater(mDeviceHandle, true);
+            return E4KEnhanceGain.fromRegisterValue(readE4KRegister(E4KEnhanceGain.getRegister(), controlI2CRepeater));
         }
-
-        boolean localI2CRepeaterControl = false;
-
-        if(gain == E4KMixerGain.AUTOMATIC)
+        finally
         {
-            writeMaskedE4KRegister(Register.AGC7,
-                AGC7_MIXER_GAIN_MASK,
-                AGC7_MIX_GAIN_AUTO,
-                localI2CRepeaterControl);
-        }
-        else
-        {
-            writeMaskedE4KRegister(Register.AGC7,
-                AGC7_MIXER_GAIN_MASK,
-                AGC7_MIX_GAIN_MANUAL,
-                localI2CRepeaterControl);
-
-            /* Set the desired manual gain setting */
-            writeMaskedE4KRegister(E4KMixerGain.getRegister(),
-                E4KMixerGain.getMask(),
-                gain.getValue(),
-                localI2CRepeaterControl);
-        }
-
-        if(controlI2CRepeater)
-        {
-            enableI2CRepeater(mDeviceHandle, false);
+            mLock.unlock();
         }
     }
 
-    public E4KMixerGain getMixerGain(boolean controlI2CRepeater)
-        throws UsbException
+    public void setMixerGain(E4KMixerGain gain, boolean controlI2CRepeater) throws UsbException
     {
-        byte autoOrManual = readMaskedE4KRegister(Register.AGC7,
-            AGC7_MIXER_GAIN_MASK,
-            controlI2CRepeater);
+        mLock.lock();
 
-        if(autoOrManual == AGC7_MIX_GAIN_AUTO)
+        try
         {
-            return E4KMixerGain.AUTOMATIC;
+            if(controlI2CRepeater)
+            {
+                enableI2CRepeater(mDeviceHandle, true);
+            }
+
+            boolean localI2CRepeaterControl = false;
+
+            if(gain == E4KMixerGain.AUTOMATIC)
+            {
+                writeMaskedE4KRegister(Register.AGC7,
+                    AGC7_MIXER_GAIN_MASK,
+                    AGC7_MIX_GAIN_AUTO,
+                    localI2CRepeaterControl);
+            }
+            else
+            {
+                writeMaskedE4KRegister(Register.AGC7,
+                    AGC7_MIXER_GAIN_MASK,
+                    AGC7_MIX_GAIN_MANUAL,
+                    localI2CRepeaterControl);
+
+                /* Set the desired manual gain setting */
+                writeMaskedE4KRegister(E4KMixerGain.getRegister(),
+                    E4KMixerGain.getMask(),
+                    gain.getValue(),
+                    localI2CRepeaterControl);
+            }
+
+            if(controlI2CRepeater)
+            {
+                enableI2CRepeater(mDeviceHandle, false);
+            }
         }
-        else
+        finally
         {
-            int register = readE4KRegister(E4KMixerGain.getRegister(),
-                controlI2CRepeater);
-
-            return E4KMixerGain.fromRegisterValue(register);
+            mLock.unlock();
         }
     }
 
-    public void setIFStage1Gain(IFStage1Gain gain,
-                                boolean controlI2CRepeater) throws UsbException
+    public E4KMixerGain getMixerGain(boolean controlI2CRepeater) throws UsbException
+    {
+        mLock.lock();
+
+        try
+        {
+            byte autoOrManual = readMaskedE4KRegister(Register.AGC7, AGC7_MIXER_GAIN_MASK, controlI2CRepeater);
+
+            if(autoOrManual == AGC7_MIX_GAIN_AUTO)
+            {
+                return E4KMixerGain.AUTOMATIC;
+            }
+            else
+            {
+                int register = readE4KRegister(E4KMixerGain.getRegister(), controlI2CRepeater);
+                return E4KMixerGain.fromRegisterValue(register);
+            }
+        }
+        finally
+        {
+            mLock.unlock();
+        }
+    }
+
+    public void setIFStage1Gain(IFStage1Gain gain, boolean controlI2CRepeater) throws UsbException
     {
         writeMaskedE4KRegister(IFStage1Gain.getRegister(),
             IFStage1Gain.getMask(),
@@ -955,8 +1004,7 @@ public class E4KTunerController extends RTL2832TunerController
         }
     }
 
-    public void setBand(long frequency,
-                        boolean controlI2CRepeater) throws UsbException
+    public void setBand(long frequency, boolean controlI2CRepeater) throws UsbException
     {
         if(controlI2CRepeater)
         {
@@ -993,8 +1041,7 @@ public class E4KTunerController extends RTL2832TunerController
         }
     }
 
-    private void setRFFilter(long frequency,
-                             boolean controlI2CRepeater) throws UsbException
+    private void setRFFilter(long frequency, boolean controlI2CRepeater) throws UsbException
     {
         RFFilter filter = RFFilter.fromFrequency(frequency);
 
